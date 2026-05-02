@@ -1,0 +1,17 @@
+/target
+/Cargo.lock.bak
+.DS_Store
+*.swp
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+docs/dist/
+docs/.astro/
+docs/node_modules/
+node_modules/
+.cache/
