@@ -8,7 +8,7 @@
 
 **Tech Stack:** Rust 2024 edition, clap v4 (derive), tokio, axum 0.7, tower 0.5, openapiv3 v2, jsonschema 0.18, reqwest 0.12, serde 1, hmac+sha2 for signatures, uuid v4. Python via uv + maturin + PyO3, FastAPI 0.115+. Astro Starlight for docs. JSON Schema 2020-12 throughout.
 
-**Spec reference:** `dev/docs/superpowers/specs/2026-05-02-harp-protocol-design.md` (in this repo)
+**Spec reference:** `dev/plan/protocol-design.md` (in this repo)
 
 **Repo:** this repo — `demml/harness-protocol`. PR 0 (commit `8fe4e9c`) created the workspace skeleton.
 
