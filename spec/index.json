@@ -1,0 +1,17 @@
+{"harp_version": "0.1", "sections": [
+  {"id": "harp-overview", "file": "00-overview.md", "status": "draft", "normative": false, "tier": null, "must_count": 0},
+  {"id": "harp-envelope", "file": "01-envelope.md", "status": "draft", "normative": true, "tier": "L1", "must_count": 19},
+  {"id": "harp-discovery", "file": "02-discovery.md", "status": "draft", "normative": true, "tier": "L2", "must_count": 8},
+  {"id": "harp-openapi-extensions", "file": "03-openapi-extensions.md", "status": "draft", "normative": true, "tier": "L1", "must_count": 13},
+  {"id": "harp-write-safety", "file": "04-write-safety.md", "status": "draft", "normative": true, "tier": "L3", "must_count": 7},
+  {"id": "harp-write-correctness", "file": "05-write-correctness.md", "status": "draft", "normative": true, "tier": "L2", "must_count": 10},
+  {"id": "harp-long-running", "file": "06-long-running.md", "status": "draft", "normative": true, "tier": "L3", "must_count": 7},
+  {"id": "harp-recipes", "file": "07-recipes.md", "status": "draft", "normative": true, "tier": "L3", "must_count": 9},
+  {"id": "harp-capability-negotiation", "file": "08-capability-negotiation.md", "status": "draft", "normative": true, "tier": "L3", "must_count": 11},
+  {"id": "harp-self-test-vectors", "file": "09-self-test-vectors.md", "status": "draft", "normative": true, "tier": null, "must_count": 7},
+  {"id": "harp-audit", "file": "10-audit.md", "status": "draft", "normative": true, "tier": "L2", "must_count": 10},
+  {"id": "harp-auth-scopes", "file": "11-auth-scopes.md", "status": "draft", "normative": true, "tier": "L1", "must_count": 5},
+  {"id": "harp-tiers", "file": "12-tiers.md", "status": "draft", "normative": true, "tier": null, "must_count": 6},
+  {"id": "harp-conformance", "file": "13-conformance.md", "status": "draft", "normative": true, "tier": null, "must_count": 5},
+  {"id": "harp-tooling", "file": "14-tooling.md", "status": "draft", "normative": false, "tier": null, "must_count": 1}
+]}
