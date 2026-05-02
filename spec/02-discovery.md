@@ -30,7 +30,7 @@ Where HARP diverges: OAuth2 metadata is auth-centric. HARP's discovery doc cover
 Single GET. Cacheable. Agent fetches once and knows everything else.
 
 ```yaml
-harness_version: "1.0"
+harness_version: "0.1"
 service:
   name: scouter
   version: "0.10.2"
@@ -78,7 +78,7 @@ trace:
 
 Declares the HARP protocol version this discovery doc conforms to.
 
-If absent, a client parsing the discovery doc cannot determine whether the field set it expects is present or whether absent fields are omitted by design. With `harness_version: "1.0"`, a client from a future HARP version knows whether to apply backwards-compat logic. MUST be present. Separate from `service.version` — the protocol version and the service version evolve independently.
+If absent, a client parsing the discovery doc cannot determine whether the field set it expects is present or whether absent fields are omitted by design. With `harness_version: "0.1"`, a client from a future HARP version knows whether to apply backwards-compat logic. MUST be present. Separate from `service.version` — the protocol version and the service version evolve independently.
 
 ### `service.name`
 
@@ -157,7 +157,7 @@ If absent, agents that propagate trace context (for `HARP-Causality` audit chain
 **Good: minimal discovery doc that correctly declares an L1 service with no optional capabilities.**
 
 ```yaml
-harness_version: "1.0"
+harness_version: "0.1"
 service:
   name: my-service
   version: "1.2.0"
@@ -190,7 +190,7 @@ trace:
 **Bad: discovery doc that claims L2 but omits `links.audit` and has no `capabilities` block.**
 
 ```yaml
-harness_version: "1.0"
+harness_version: "0.1"
 service:
   name: my-service
   version: "1.2.0"
