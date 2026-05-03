@@ -62,6 +62,8 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │       │   ├── test.rs         [PR 14]
 │   │       │   ├── migrate.rs      [PR 11]
 │   │       │   ├── docs.rs         [PR 12]
+│   │       │   ├── harness.rs      [client harness addendum]
+│   │       │   ├── agent.rs        [client harness addendum]
 │   │       │   └── serve_refs.rs   [PR 18]
 │   │       └── actions/
 │   │           ├── mod.rs          [PR 8]
@@ -70,7 +72,9 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │           ├── lint.rs         [PR 9]
 │   │           ├── conformance.rs  [PR 14]
 │   │           ├── migrate.rs      [PR 11]
-│   │           └── docs.rs         [PR 12]
+│   │           ├── docs.rs         [PR 12]
+│   │           ├── harness.rs      [client harness addendum]
+│   │           └── agent.rs        [client harness addendum]
 │   │
 │   ├── harp-core/                  ← protocol types
 │   │   ├── Cargo.toml              [PR 3]
@@ -131,6 +135,17 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │       ├── scaffold.rs         ← schemas/catalog/discovery/vectors [PR 10]
 │   │       ├── docs.rs             ← Astro Starlight emitter [PR 12]
 │   │       └── error.rs            [PR 10]
+│   │
+│   ├── harp-harness/               ← client-side HARP service registry + safe execution
+│   │   ├── Cargo.toml              [client harness addendum]
+│   │   └── src/
+│   │       ├── lib.rs
+│   │       ├── registry.rs         ← ~/.harp and .harp registry load/merge
+│   │       ├── discovery.rs        ← fetch /.well-known/harness + OpenAPI
+│   │       ├── operations.rs       ← operationId index and intent planning
+│   │       ├── call.rs             ← safe HARP calls
+│   │       ├── agent.rs            ← adapter installation helpers
+│   │       └── error.rs
 │   │
 │   ├── harp-axum/                  ← reference Rust middleware
 │   │   ├── Cargo.toml              [PR 15]
@@ -214,7 +229,9 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 ├── conformance/                    ← tier-graded scaffolds
 │   └── (per-tier test vectors and rules) [PR 13]
 │
-├── docs/                           ← Astro Starlight site (generated) [PR 12]
+├── docs/
+│   ├── agent-harness-user-journey.md ← draft client-side + agent-side user journey
+│   └── (Astro Starlight site generated later) [PR 12]
 │
 └── tools/skills/                   ← skill source-of-truth, versioned in repo
     ├── install.sh                  ← symlinks into ~/.claude/skills/ [PR 23]
@@ -227,9 +244,12 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
     ├── harness-conformance-test/
     │   ├── SKILL.md                [PR 25]
     │   └── references/             [PR 25]
-    └── harness-api-migrate/
-        ├── SKILL.md                [PR 26]
-        └── references/             [PR 26]
+    ├── harness-api-migrate/
+    │   ├── SKILL.md                [PR 26]
+    │   └── references/             [PR 26]
+    └── harness-consumer/
+        ├── SKILL.md                [client harness addendum]
+        └── references/             [client harness addendum]
 ```
 
 ---
@@ -268,7 +288,18 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 | **H — Polish** | 27 | End-to-end smoke + ref-impl conformance CI | 17, 22 |
 | | 28 | v0.1.0 release prep | all |
 
-29 PRs. Critical path: 0 → 1, 2, 3 → 4, 5, 8 → 6 → 7 → 9 → 14, 17. Everything else parallelizes after PR 3.
+29 PRs plus a client/agent harness addendum. Critical path: 0 → 1, 2, 3 → 4, 5, 8 → 6 → 7 → 9 → 14, 17. Everything else parallelizes after PR 3.
+
+### Client/Agent Harness Addendum
+
+This addendum should be slotted after PR 12 and before release polish. It adds the local client-side harness needed for actual agent consumption.
+
+| Addendum | Title | Depends on |
+|---|---|---|
+| H1 | `harp-harness` crate | 3, 4, 8 |
+| H2 | `harp harness` CLI commands | H1 |
+| H3 | `harp agent install claude-code` + `harness-consumer` skill | H1, H2 |
+| H4 | Agent harness docs + smoke tests | H2, H3 |
 
 ---
 
@@ -323,6 +354,7 @@ harp-lint = { path = "crates/harp-lint" }
 harp-conformance = { path = "crates/harp-conformance" }
 harp-migrate = { path = "crates/harp-migrate" }
 harp-codegen = { path = "crates/harp-codegen" }
+harp-harness = { path = "crates/harp-harness" }
 harp-axum = { path = "crates/harp-axum" }
 harp-fixtures = { path = "crates/harp-fixtures" }
 
@@ -1102,6 +1134,73 @@ pnpm 9.12.0
 
 ---
 
+## Client/Agent Harness Addendum Details
+
+These addenda make HARP consumable by local agents. They are client-side features, not service conformance features.
+
+### H1: `harp-harness` crate
+
+**Goal:** Provide a local registry and safe execution engine for HARP services.
+
+**Files:**
+- Create: `crates/harp-harness/Cargo.toml`, `src/{lib,registry,discovery,operations,call,agent,error}.rs`
+- Modify: workspace dependencies to include `harp-harness`
+- Create: tests + fixtures for registry, discovery, operation indexing, and safe call policy
+
+- [ ] **Step 1: TDD registry loading** — read `~/.harp/harness.yaml` and `.harp/harness.yaml`; project entries override user entries by service name.
+- [ ] **Step 2: TDD auth references** — accept `env:NAME`; reject raw-looking bearer tokens, API keys, and inline secret values.
+- [ ] **Step 3: TDD discovery refresh** — fetch `/.well-known/harness`, validate L1 discovery, fetch OpenAPI from `links.openapi`, and persist metadata.
+- [ ] **Step 4: TDD operation index** — build `operationId -> method, path template, parameters, requestBody schema, responses, x-harness`; fail on missing or duplicate `operationId`.
+- [ ] **Step 5: TDD safe call planner** — classify operations as read/write/destructive; surface required auth, body, params, idempotency, ETag, dry-run, and two-phase policy.
+- [ ] **Step 6: TDD call executor** — validate input against OpenAPI, attach HARP headers and auth, execute request, validate HARP response shape, and return structured JSON.
+
+**Acceptance:** A mock HARP service can be added, inspected, planned against, and called by `operation_id` without raw route input from the caller.
+
+### H2: `harp harness` CLI commands
+
+**Goal:** Expose the harness crate through agent-friendly CLI commands.
+
+**Files:**
+- Modify: `crates/harp/src/cli/{mod,harness}.rs`, `crates/harp/src/actions/{mod,harness}.rs`
+- Modify: `crates/harp/Cargo.toml` to depend on `harp-harness`
+
+- [ ] Implement: `init`, `add`, `refresh`, `list`, `inspect`, `ops`, `recipes`, `plan`, `call`, `recipe run`, `commit`.
+- [ ] Default to human-readable output in terminals and support `--format json` for agent adapters.
+- [ ] Return exit code 1 for policy/refusal/validation failures and exit code 2 for internal execution errors.
+
+**Acceptance:** The CLI supports the documented flow in `docs/agent-harness-user-journey.md` against a mock service.
+
+### H3: `harp agent install claude-code` + `harness-consumer`
+
+**Goal:** Install the first agent adapter while keeping the harness vendor-neutral.
+
+**Files:**
+- Modify: `crates/harp/src/cli/{mod,agent}.rs`, `crates/harp/src/actions/{mod,agent}.rs`
+- Create: `tools/skills/harness-consumer/SKILL.md`
+- Modify: `tools/skills/install.sh`
+
+- [ ] `harp agent install claude-code --scope user|project` writes the `harness-consumer` skill to the correct Claude Code skill location.
+- [ ] The skill instructs Claude to use `harp harness inspect`, `plan`, `call`, `recipe run`, and `commit`.
+- [ ] The skill explicitly tells Claude not to issue raw HTTP against registered HARP service URLs.
+- [ ] Optional hook template blocks raw `curl`, `wget`, `http`, or scripts against registered base URLs unless invoked through `harp harness`.
+
+**Acceptance:** From a clean Claude Code setup, a user can install the adapter, ask Claude to add a HARP service, and have Claude use `harp harness` commands for reads.
+
+### H4: Agent harness docs + smoke tests
+
+**Goal:** Keep the documented user journey executable.
+
+**Files:**
+- Maintain: `docs/agent-harness-user-journey.md`
+- Future generated docs pages: `docs/concepts/agent-harness.md`, `docs/guides/claude-code-harp.md`, `docs/guides/add-harp-service.md`
+
+- [ ] Add transcript-style examples covering install, add service, read, write, destructive preview/commit, missing auth, and ambiguous intent.
+- [ ] Add smoke tests that replay the documented command sequence against the reference service.
+
+**Acceptance:** A new user can answer what to install, where service registry lives, how Claude resolves routes, and what blocks unsafe raw HTTP.
+
+---
+
 ## Phase D — Conformance
 
 ### PR 13: `harp-conformance` crate
@@ -1462,6 +1561,6 @@ Once `harness-api-review` skill (PR 24) lands, every subsequent PR review can in
 - Both ref-impls attain L3 on a clean clone
 - `~/.claude/skills/harness-*` invoked successfully from a Claude Code conversation against a third-party project
 - v0.1.0 tag pushed
-- `crates.io` publication in leaf-first dependency order: `harp-core` → `harp-fixtures` → `harp-openapi` → `harp-lint` → `harp-codegen` → `harp-migrate` → `harp-conformance` → `harp-axum` → `harp` (binary)
+- `crates.io` publication in leaf-first dependency order: `harp-core` → `harp-fixtures` → `harp-openapi` → `harp-lint` → `harp-codegen` → `harp-migrate` → `harp-conformance` → `harp-harness` → `harp-axum` → `harp` (binary)
 - PyPI publication of `harp` Python package
 - README updated with install + quickstart + tier badge for self

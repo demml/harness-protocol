@@ -1,6 +1,6 @@
 # HARP — Harness Agent-Ready Protocol
 
-HARP is a vendor-neutral protocol layered on HTTP/OpenAPI that makes services equally usable by humans and AI coding agents. It defines a three-tier compliance ramp — L1 Baseline (machine-readable contracts, stable errors, versioned routes), L2 Agent-ready (discovery endpoints, structured outputs, idempotent operations), and L3 Autonomous-ready (full action graphs, capability negotiation, and cryptographic audit trails) — so teams can adopt incrementally without rewriting existing APIs.
+HARP is a vendor-neutral protocol layered on HTTP/OpenAPI that makes services equally usable by humans and AI coding agents. It defines a three-tier compliance ramp — L1 Baseline (minimal discovery, stable error envelopes, traceability), L2 Agent-ready (structured success envelopes, actions, idempotency, ETags, audit), and L3 Autonomous-ready (dry-run, two-phase destructive commits, recipes, capability negotiation, long-running jobs) — so teams can adopt incrementally without rewriting existing APIs.
 
 ## Status
 
@@ -8,7 +8,22 @@ Pre-1.0 / experimental. Protocol version 0.1.
 
 ## Spec
 
-The spec lives under `spec/` once PR 1 lands.
+The draft spec lives under `spec/`.
+
+## Using HARP From an Agent
+
+HARP is meant to be consumed through a local harness, not by asking an agent to guess HTTP routes from prose. The planned flow is:
+
+```bash
+harp agent install claude-code --scope user
+harp harness add service-a https://api.service-a.com --auth-env SERVICE_A_TOKEN
+harp harness plan service-a "get entity a" --format json
+harp harness call service-a get_entity --params '{"entity_id":"a"}' --format json
+```
+
+Claude Code is the first planned adapter. The vendor-neutral piece is `harp harness`: a local registry and execution layer that owns discovery, OpenAPI operation resolution, auth references, safety policy, and HARP response handling.
+
+See [docs/agent-harness-user-journey.md](docs/agent-harness-user-journey.md) for the draft client-side and agent-side user journey.
 
 ## Quickstart
 
