@@ -43,15 +43,15 @@ Field-mask is out of v1.
 
 #### 10.2 Server Behavior
 
-- `compact`: drop `_actions`, drop `_meta.cost`, drop optional `_meta` fields. MUST keep `data`, `error`, `code`, `trace_id`.
+- `compact`: MAY drop `_actions`, `_meta.cost`, and optional `_meta` fields. MUST keep `data` or `error`, `_meta.tier`, `trace_id`, and error `code`.
 - `verbose`: expand `_actions` with inline examples, inline `failure_catalog` for current op, include `recipes_relevant`.
 - Context-Budget enforced server-side. If projected response exceeds budget: server applies fallback projection in this order:
   1. Drop `_actions[].doc_url` and recipes.
-  2. Drop `_meta.cost` and `_meta.adaptations`.
+  2. Drop `_meta.cost`.
   3. Truncate `data` arrays. MUST set `_meta.truncated: { dropped: N, total: M }`.
 - Server MUST confirm what was applied via response header `HARP-Verbosity-Applied` and `_meta.adaptations`:
   ```json
-  "adaptations": { "verbosity": "compact", "truncated": false }
+  "adaptations": { "verbosity": "compact", "truncated": false, "omitted_fields": ["_actions", "_meta.cost"] }
   ```
 
 #### 10.3 Full HARP Header Reference
@@ -108,7 +108,7 @@ If absent, the server has no bound on response size for the request. If present 
 
 Declares what the server actually changed about the response.
 
-If absent, a client that requested a compact response cannot verify which fields were dropped. An agent that needs `_meta.cost` for budget tracking but sent `HARP-Verbosity: compact` (which drops it) needs to know `cost` was dropped so it can make a second call at `normal` verbosity if needed. `adaptations.verbosity` and `adaptations.truncated` give the client this signal. MUST be present when the server modified the response shape.
+If absent, a client that requested a compact response cannot verify which fields were dropped. An agent that needs `_meta.cost` for budget tracking but sent `HARP-Verbosity: compact` (which may drop it) needs to know `cost` was dropped so it can make a second call at `normal` verbosity if needed. `adaptations.verbosity`, `adaptations.truncated`, and `adaptations.omitted_fields` give the client this signal. MUST be present when the server modified the response shape.
 
 ### `_meta.truncated`
 
@@ -165,7 +165,15 @@ Response body (compact — no `_actions`, no `_meta.cost`):
 ```json
 {
   "data": { "uid": "abc123", "model_uid": "foo/bar/1.0", "status": "active" },
-  "_meta": { "tier": "L3", "trace_id": "01HV7P...", "adaptations": { "verbosity": "compact", "truncated": false } }
+  "_meta": {
+    "tier": "L3",
+    "trace_id": "01HV7P...",
+    "adaptations": {
+      "verbosity": "compact",
+      "truncated": false,
+      "omitted_fields": ["_actions", "_meta.cost"]
+    }
+  }
 }
 ```
 
@@ -182,7 +190,7 @@ Response body (1200 tokens):
 
 Agent's context budget was 500 tokens. It receives 1200. The tool output is truncated by the agent runtime. The agent sees partial JSON, fails to parse it, and retries — producing another 1200-token response. The loop continues until context is exhausted.
 
-**Fix:** Honor `HARP-Verbosity: compact` by dropping `_actions`, `_meta.cost`, and non-essential `_meta` fields. Set `HARP-Verbosity-Applied: compact`. If the response still exceeds `HARP-Context-Budget`, apply the truncation fallback and set `_meta.truncated`.
+**Fix:** Honor `HARP-Verbosity: compact` by dropping `_actions`, `_meta.cost`, and non-essential `_meta` fields. Set `HARP-Verbosity-Applied: compact` and declare dropped fields in `_meta.adaptations.omitted_fields`. If the response still exceeds `HARP-Context-Budget`, apply the truncation fallback and set `_meta.truncated`.
 
 ## Cross-references
 
@@ -194,4 +202,4 @@ Agent's context budget was 500 tokens. It receives 1200. The tool output is trun
 
 ## Limitations and v0.1 caveats
 
-Token counting for `HARP-Context-Budget` enforcement is not standardized: different tokenizers produce different counts for the same JSON body. The spec requires the server to make a best-effort estimate; clients that send `HARP-Context-Budget` MUST tolerate responses slightly above or below the requested budget. Field-mask (selective field projection by the client) is explicitly deferred to v0.2. The `HARP-Format: yaml` and `HARP-Format: json-compact` options allow the server to return alternative wire formats, but the spec does not guarantee that all fields round-trip identically in YAML encoding — callers SHOULD prefer `json` for machine consumption.
+Token counting for `HARP-Context-Budget` enforcement is not standardized: different tokenizers produce different counts for the same JSON body. The spec requires the server to make a best-effort estimate; clients that send `HARP-Context-Budget` MUST tolerate responses slightly above or below the requested budget. Field-mask (selective field projection by the client) is explicitly deferred to v0.2. Compact projection can omit L2 fields, but those omissions MUST be declared in `_meta.adaptations.omitted_fields`; clients that require omitted fields should retry at `normal` or `verbose`. The `HARP-Format: yaml` and `HARP-Format: json-compact` options allow the server to return alternative wire formats, but the spec does not guarantee that all fields round-trip identically in YAML encoding — callers SHOULD prefer `json` for machine consumption.

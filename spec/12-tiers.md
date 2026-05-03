@@ -35,10 +35,11 @@ Cheap retrofit on any existing OpenAPI service. A service at L1 MUST implement:
 
 | Capability | Letter | Normative Section |
 |---|---|---|
+| Minimal `/.well-known/harness` discovery doc | a | [Discovery](./02-discovery.md) §5 |
 | Error envelope | b | [Envelope](./01-envelope.md) §6.1 |
 | Failure catalog per endpoint | n | [OpenAPI Extensions](./03-openapi-extensions.md) §7 |
 | Worked examples in schema | o | [OpenAPI Extensions](./03-openapi-extensions.md) §7 |
-| Op semantics tags (`read \| write \| destructive \| idempotent \| long_running`) | k | [OpenAPI Extensions](./03-openapi-extensions.md) §7 |
+| Op semantics tags (`read \| write \| destructive`) | k | [OpenAPI Extensions](./03-openapi-extensions.md) §7 |
 | `trace_id` on every response | s | [Envelope](./01-envelope.md) §6, [Audit](./10-audit.md) §11 |
 | Auth scopes in OpenAPI | h | [Auth Scopes](./11-auth-scopes.md) §13 |
 | Versioning headers | i | [OpenAPI Extensions](./03-openapi-extensions.md) §7 |
@@ -51,7 +52,6 @@ Response self-describes; agent navigates without prose. A service at L2 MUST imp
 
 | Capability | Letter | Normative Section |
 |---|---|---|
-| `/.well-known/harness` discovery doc | a | [Discovery](./02-discovery.md) §5 |
 | Response metadata wrapper `{data, _meta}` | c | [Envelope](./01-envelope.md) §6.2 |
 | Action affordances `_actions[]` | d | [Envelope](./01-envelope.md) §6.2 |
 | Idempotency keys | e | [Write Correctness](./05-write-correctness.md) §9.1 |
@@ -89,13 +89,13 @@ The `effective_tier` (output of conformance test run) MAY also be published in t
 
 ### L1 capability set
 
-The L1 requirements are the cheapest possible retrofit: they add metadata to existing responses (error envelopes, trace IDs) and add annotations to the existing OpenAPI spec (x-harness blocks, examples_ref). They do not require new endpoints, new state, or new infrastructure. A service that already returns structured errors and has an OpenAPI spec can reach L1 in a day with `harp init` and `harp lint`.
+The L1 requirements are the cheapest possible retrofit: they add metadata to existing responses (error envelopes, trace IDs), add annotations to the existing OpenAPI spec (x-harness blocks, examples_ref), and expose a minimal discovery document that tells agents what tier they can trust. They do not require durable write state or job infrastructure. A service that already returns structured errors and has an OpenAPI spec can reach L1 in a day with `harp init` and `harp lint`.
 
-The choice of error envelope and semantics tags as the L1 floor is deliberate: errors and operation semantics are the minimum information needed for an agent to avoid catastrophic mistakes (retrying a non-retryable error, treating a destructive op as safe). Everything else (discovery, affordances, write safety) requires a higher floor.
+The choice of error envelope, minimal discovery, and semantics tags as the L1 floor is deliberate: agents need a bootstrap document to know the tier, errors to recover, and operation semantics to avoid catastrophic mistakes (retrying a non-retryable error, treating a destructive op as safe). Rich affordances and write safety require a higher floor.
 
 ### L2 capability set
 
-L2 is the "agent doesn't need docs" milestone. The discovery doc (`/.well-known/harness`), action affordances (`_actions[]`), and response metadata wrapper (`{data, _meta}`) together make a response self-describing. An agent that receives an L2 response knows what the resource is, what it can do with it, what it costs, and how to navigate to related resources — from the response alone, without prior knowledge of the API.
+L2 is the "agent doesn't need docs" milestone. The richer discovery fields, action affordances (`_actions[]`), and response metadata wrapper (`{data, _meta}`) together make a response self-describing. An agent that receives an L2 response knows what the resource is, what it can do with it, what it costs, and how to navigate to related resources — from the response alone, without prior knowledge of the API.
 
 Idempotency keys and optimistic concurrency land at L2 because they require durable server-side storage (Redis or Postgres for the idempotency cache, etag generation and storage). They are more expensive to implement than L1 — the tier placement reflects the implementation cost.
 

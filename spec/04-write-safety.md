@@ -53,7 +53,7 @@ Server MUST:
 
 #### 8.2 Two-phase Destructive Commit
 
-Mandatory at L3 for ops with `x-harness.two_phase: true`. Cannot be bypassed.
+Mandatory at L3 for ops with `x-harness.two_phase: true`. Cannot be bypassed. Runtime `_actions[]` entries for those operations MUST include `preview_href` and `commit_href`; agents MUST follow those hrefs rather than deriving phase URLs from the resource path.
 
 **Phase 1 — preview:**
 
@@ -128,6 +128,12 @@ If absent, dry-run returns a simulated post-state in `data` but does not enumera
 A cryptographically signed commitment to a specific destructive operation.
 
 If absent (or unsigned), there is nothing preventing the phase-2 commit from being submitted with a modified body — the agent that previewed deletion of profile `foo/bar/1.0` could be tricked into committing deletion of `foo/bar/2.0`. The HMAC binding of (resource, op, requestor, body_hash) makes the token inseparable from the exact operation it authorizes. MUST be present in the phase-1 response.
+
+### `preview_href` / `commit_href`
+
+Action hrefs for the two phases of a destructive operation.
+
+If absent, agents must infer whether preview and commit are query parameters on a `DELETE`, a `POST /delete` route, or some service-specific path. That inference is brittle and unsafe for autonomous destructive calls. MUST be present on `_actions[]` entries where `requires_two_phase: true`. `commit_href` MUST include the literal `{confirmation_token}` placeholder where the phase-1 token is inserted with URI percent-encoding.
 
 ### `expires_at`
 
@@ -208,7 +214,7 @@ DELETE /drift/profiles/foo/bar/1.0
 Authorization: Bearer $TOKEN
 ```
 
-Response: 405 or service-specific error — the direct DELETE route does not exist at L3 for `two_phase: true` operations. The agent wasted a call and has no confirmation token to proceed with.
+Response: 405 or service-specific error — the direct DELETE route does not exist at L3 for `two_phase: true` operations. The agent ignored the advertised `preview_href` and `commit_href`, wasted a call, and has no confirmation token to proceed with.
 
 ## Cross-references
 

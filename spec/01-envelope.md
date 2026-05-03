@@ -69,7 +69,7 @@ Rules (MUST unless noted):
 - `trace_id` MUST match the `x-trace-id` response header.
 - Protocol-level errors use `HARP_*` codes (`HARP_ETAG_MISMATCH`, `HARP_INSUFFICIENT_SCOPE`, `HARP_IDEMPOTENCY_KEY_REUSED`, `HARP_DRY_RUN_NOT_SUPPORTED`, etc.). Service-level errors use the service's declared prefix.
 
-### 6.2 Success Envelope (every 2xx response)
+### 6.2 Success Envelope (L2+ every 2xx response)
 
 ```json
 {
@@ -102,6 +102,8 @@ Rules (MUST unless noted):
       "method": "DELETE",
       "href": "/drift/profiles/foo/bar/1.0",
       "requires_two_phase": true,
+      "preview_href": "/drift/profiles/foo/bar/1.0/delete?phase=preview",
+      "commit_href": "/drift/profiles/foo/bar/1.0/delete?phase=commit&confirmation_token={confirmation_token}",
       "semantics": "destructive",
       "doc_url": "..."
     },
@@ -117,11 +119,13 @@ Rules (MUST unless noted):
 
 Rules:
 
-- `data` MUST be present on every 2xx. Empty response: `{"data": null}`.
-- `_meta` MUST be present at L1+.
+- At L2+, `data` MUST be present on every 2xx. Empty response: `{"data": null}`.
+- At L2+, `_meta` MUST be present on every 2xx.
+- L1 services MAY use the success envelope, but are not required to wrap every successful response.
 - `_actions` MUST be present at L2+ for ops returning a resource. MAY be empty.
 - `_actions[].semantics` MUST use the same vocabulary as `x-harness.semantics` (see [OpenAPI Extensions](./03-openapi-extensions.md)).
 - `_actions[].requires_etag` and `requires_two_phase` flag client preconditions inline.
+- `_actions[].preview_href` and `_actions[].commit_href` MUST be present when `requires_two_phase: true`.
 - List responses use `data: [...]` with `_meta.pagination: { next_cursor, total }`.
 - `_meta.cost` is the body-side mirror of the `HARP-Cost-Units` and `HARP-Actual-Ms` headers; both header and body MUST be present at L2+. See [Capability Negotiation](./08-capability-negotiation.md) for the full header set.
 
@@ -173,13 +177,13 @@ If absent, support engineers cannot find the server-side log entry for a failure
 
 Points to the JSON Schema that validates the `data` field.
 
-If absent, agents validating the response shape must hardcode schema paths or skip validation entirely. A resolvable schema ref enables programmatic validation without prior knowledge of the service's schema layout. MUST be present at L1+.
+If absent, agents validating the response shape must hardcode schema paths or skip validation entirely. A resolvable schema ref enables programmatic validation without prior knowledge of the service's schema layout. MUST be present in L1 error envelopes and L2+ success envelopes.
 
 ### `_meta.tier`
 
 Declares which HARP tier this response conforms to.
 
-If absent, agents cannot verify that the response they received matches the tier they expect. Useful when a service partially implements a tier — the response itself declares what is guaranteed. MUST be present at L1+.
+If absent, agents cannot verify that the response they received matches the tier they expect. Useful when a service partially implements a tier — the response itself declares what is guaranteed. MUST be present in L1 error envelopes and L2+ success envelopes.
 
 ### `_meta.cost`
 
@@ -215,7 +219,7 @@ If absent, an agent attempting an update without `If-Match` receives a 428 (or s
 
 Signals that the client MUST execute a preview + commit sequence for this action.
 
-If absent on a destructive action, an agent may attempt a direct `DELETE`, which will fail at L3 or execute permanently at a non-L3 service. `requires_two_phase: true` is the machine-readable instruction to route through the two-phase flow defined in [Write Safety](./04-write-safety.md).
+If absent on a destructive action, an agent may attempt a direct `DELETE`, which will fail at L3 or execute permanently at a non-L3 service. `requires_two_phase: true` is the machine-readable instruction to route through the two-phase flow defined in [Write Safety](./04-write-safety.md). When true, `preview_href` and `commit_href` remove URL derivation from client code; agents follow those hrefs literally.
 
 ## Examples
 
@@ -273,7 +277,15 @@ The agent has the data but does not know how to update or delete it, does not kn
   "_meta": { "schema_ref": "...", "tier": "L2", "etag": "W/\"v1\"", "trace_id": "...", "occurred_at": "..." },
   "_actions": [
     { "rel": "update", "method": "PUT", "href": "/drift/profiles/abc123", "requires_etag": true, "semantics": "write" },
-    { "rel": "delete", "method": "DELETE", "href": "/drift/profiles/abc123", "requires_two_phase": true, "semantics": "destructive" }
+    {
+      "rel": "delete",
+      "method": "DELETE",
+      "href": "/drift/profiles/abc123",
+      "requires_two_phase": true,
+      "preview_href": "/drift/profiles/abc123/delete?phase=preview",
+      "commit_href": "/drift/profiles/abc123/delete?phase=commit&confirmation_token={confirmation_token}",
+      "semantics": "destructive"
+    }
   ]
 }
 ```

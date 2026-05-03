@@ -80,10 +80,11 @@ Each tier compounds on the prior. A service declares its maximum tier in `/.well
 
 | Capability | Letter | Section |
 |---|---|---|
+| Minimal `/.well-known/harness` discovery doc | a | §5 |
 | Error envelope | b | §6 |
 | Failure catalog per endpoint | n | §7 |
 | Worked examples in schema | o | §7 |
-| Op semantics tags (`read | write | destructive | idempotent | long_running`) | k | §7 |
+| Op semantics tags (`read | write | destructive`) | k | §7 |
 | `trace_id` on every response | s | §6, §11 |
 | Auth scopes in OpenAPI | h | §13 |
 | Versioning headers | i | §7 |
@@ -92,7 +93,6 @@ Each tier compounds on the prior. A service declares its maximum tier in `/.well
 
 | Capability | Letter | Section |
 |---|---|---|
-| `/.well-known/harness` discovery doc | a | §5 |
 | Response metadata wrapper `{data, _meta}` | c | §6 |
 | Action affordances `_actions[]` | d | §6 |
 | Idempotency keys | e | §9 |
@@ -118,7 +118,7 @@ Each tier compounds on the prior. A service declares its maximum tier in `/.well
 Single GET. Cacheable. Agent fetches once and knows everything else.
 
 ```yaml
-harness_version: "1.0"
+harness_version: "0.1"
 service:
   name: scouter
   version: "0.10.2"
@@ -155,6 +155,8 @@ trace:
 ```
 
 `/.well-known/harness/errors`, `/.well-known/harness/scopes`, `/.well-known/harness/recipes`, `/.well-known/harness/envelope.json` are sub-resources documented in their own sections.
+
+L1 services serve a minimal discovery document with protocol version, service identity, declared tier, OpenAPI/error links, auth modes, envelope schema link, and trace header. L2+ services add richer capability, budget, audit, scopes, examples, and effective-tier fields.
 
 ## 6. Canonical Envelope
 
@@ -231,6 +233,8 @@ Rules (MUST unless noted):
       "method": "DELETE",
       "href": "/drift/profiles/foo/bar/1.0",
       "requires_two_phase": true,
+      "preview_href": "/drift/profiles/foo/bar/1.0/delete?phase=preview",
+      "commit_href": "/drift/profiles/foo/bar/1.0/delete?phase=commit&confirmation_token={confirmation_token}",
       "semantics": "destructive",
       "doc_url": "..."
     },
@@ -246,11 +250,13 @@ Rules (MUST unless noted):
 
 Rules:
 
-- `data` MUST be present on every 2xx. Empty response: `{"data": null}`.
-- `_meta` MUST be present at L1+.
+- At L2+, `data` MUST be present on every 2xx. Empty response: `{"data": null}`.
+- At L2+, `_meta` MUST be present on every 2xx.
+- L1 services MAY use the success envelope, but are not required to wrap every successful response.
 - `_actions` MUST be present at L2+ for ops returning a resource. MAY be empty.
 - `_actions[].semantics` MUST use the same vocabulary as `x-harness.semantics` (§7).
 - `_actions[].requires_etag` and `requires_two_phase` flag client preconditions inline.
+- `_actions[].preview_href` and `_actions[].commit_href` MUST be present when `requires_two_phase: true`.
 - List responses use `data: [...]` with `_meta.pagination: { next_cursor, total }`.
 - `_meta.cost` is the body-side mirror of the `HARP-Cost-Units` and `HARP-Actual-Ms` headers; both header and body MUST be present at L2+. See §10.3 for the full header set.
 
@@ -262,7 +268,7 @@ paths:
     post:
       summary: Register drift profile
       x-harness:
-        semantics: write              # read | write | destructive | idempotent | long_running
+        semantics: write              # read | write | destructive
         stability: stable             # stable | beta | experimental
         idempotent: false             # supports Idempotency-Key header
         requires_etag: false          # writes require If-Match
@@ -432,15 +438,15 @@ Field-mask is **out of v1**.
 
 ### 10.2 Server behavior
 
-- `compact`: drop `_actions`, drop `_meta.cost`, drop optional `_meta` fields. MUST keep `data`, `error`, `code`, `trace_id`.
+- `compact`: MAY drop `_actions`, `_meta.cost`, and optional `_meta` fields. MUST keep `data` or `error`, `_meta.tier`, `trace_id`, and error `code`.
 - `verbose`: expand `_actions` with inline examples, inline `failure_catalog` for current op, include `recipes_relevant`.
 - Context-Budget enforced server-side. If projected response exceeds budget: server applies fallback projection in this order:
   1. Drop `_actions[].doc_url` and recipes.
-  2. Drop `_meta.cost` and `_meta.adaptations`.
+  2. Drop `_meta.cost`.
   3. Truncate `data` arrays. MUST set `_meta.truncated: { dropped: N, total: M }`.
 - Server MUST confirm what was applied via response header `HARP-Verbosity-Applied` and `_meta.adaptations`:
   ```json
-  "adaptations": { "verbosity": "compact", "truncated": false }
+  "adaptations": { "verbosity": "compact", "truncated": false, "omitted_fields": ["_actions", "_meta.cost"] }
   ```
 
 ### 10.3 Full HARP header reference
@@ -654,25 +660,28 @@ recipes:
       - name: cron_job_id
     steps:
       - id: create
-        operation: POST /drift/profiles
+        operation_id: register_drift_profile
         body_template: |
-          { "model_uid": "${inputs.model_uid}", "features": ${inputs.feature_names} }
+          { "model_uid": ${inputs.model_uid}, "features": ${inputs.feature_names} }
         capture: { profile_uid: "$.data.uid" }
       - id: alert
-        operation: POST /alerts/configs
+        operation_id: create_alert_config
         depends_on: [create]
         body_template: |
-          { "profile_uid": "${steps.create.profile_uid}", "channel": "slack" }
+          { "profile_uid": ${steps.create.profile_uid}, "channel": "slack" }
       - id: schedule
-        operation: POST /scheduler/cron
+        operation_id: create_cron_schedule
         depends_on: [create]
         body_template: |
-          { "profile_uid": "${steps.create.profile_uid}", "cron": "0 * * * *" }
+          { "profile_uid": ${steps.create.profile_uid}, "cron": "0 * * * *" }
         capture: { cron_job_id: "$.data.id" }
     failure_modes:
       - step: create
         error: SCOUTER_DUPLICATE_PROFILE
         recovery: "Use existing profile_uid from error._meta.existing_uid; skip to alert step"
+        action: use_existing
+        use_existing_from: "$.error._meta.existing_uid"
+        continue_at: alert
     examples_ref: /openapi/examples/recipes/register_drift_workflow
     tier: L2
 ```
@@ -680,6 +689,8 @@ recipes:
 Notes:
 
 - `body_template` uses simple `${...}` interpolation with namespaces `inputs.<name>` and `steps.<id>.<captured>`. JSONata explicitly NOT used in v1 to keep agent execution trivial.
+- Interpolation is JSON-value substitution after input schema validation; runners quote strings and preserve array/object/number/boolean/null types.
+- `operation_id` is a join key into `links.openapi`; agents resolve it to method, path template, parameters, request body schema, and server URL from OpenAPI before executing the step.
 - `capture` extracts via JSONPath into named vars for downstream steps.
 - `depends_on` declares the DAG.
 - `failure_modes` enumerates known recovery hints per step + error code.
@@ -705,7 +716,7 @@ Notes:
       "response": {
         "status": 201,
         "headers": { "ETag": "W/\"v1\"" },
-        "body": { "data": {}, "_meta": {}, "_actions": [] }
+        "body": { "uid": "...", "status": "active" }
       },
       "tier_required": "L1"
     },
@@ -950,7 +961,7 @@ Lives in `harness-protocol/conformance/`. Generic harness in any language; refer
 |---|---|---|
 | Discovery doc shape | L1+ | Validate against `discovery.json` schema |
 | Error envelope on synthetic errors | L1+ | Trigger every `possible_errors` entry per op via vector replay |
-| Success envelope on synthetic happy path | L1+ | Validate `_meta` presence, `trace_id` consistency |
+| Success envelope on synthetic happy path | L2+ | Validate `data`, `_meta` presence, `_meta.trace_id` consistency |
 | Action affordances correctness | L2+ | Follow `_actions[]` rels, verify reachable, verify required preconditions match |
 | Idempotency replay semantics | L2+ | Replay same key + same body, replay + different body |
 | Etag concurrency | L2+ | Stale `If-Match` returns 412 + envelope |
@@ -1034,7 +1045,7 @@ Two-layer architecture: thin clap shell (`crates/harp/src/cli/*`) delegates to p
 |---|---|---|
 | `harp init` | Bootstrap. Takes existing OpenAPI doc → scaffolds `x-harness` blocks with safe defaults, creates `harness.yaml`, emits human-review TODOs for fields that cannot be inferred (cost budgets, scopes, related_recipes). | `harp-codegen` |
 | `harp scaffold` | Generate ancillary files (JSON Schemas, error catalog, discovery doc template, vector skeletons) from existing `x-harness` annotations. Run after `init` or after editing extensions. | `harp-codegen` |
-| `harp lint` | Static tier compliance check. No network. Reads OpenAPI doc, `harness.yaml`, schemas, vectors, recipes. Validates: every op has `semantics` (L1); `possible_errors` codes are namespaced and resolve to catalog (L1); `examples_ref` resolves to a valid vector file (L1); discovery doc shape valid against `discovery.json` schema (L2); response schemas declare `_meta` (L2); `_actions[]` rels reference real op IDs (L2); idempotency / etag flags consistent (L2); recipe DAGs reference real ops, `body_template` parseable (L3); vector coverage matches tier minimum (one success vector per op at L1; one failure vector per `possible_errors` entry at L2; one dry-run vector and one two-phase preview+commit pair at L3, when applicable); all cross-refs (discovery → openapi → x-harness → schemas) resolve. Exits non-zero on violations. | `harp-lint` |
+| `harp lint` | Static tier compliance check. No network. Reads OpenAPI doc, `harness.yaml`, schemas, vectors, recipes. Validates: minimal discovery doc shape (L1); every op has `semantics` using `read \| write \| destructive` (L1); `possible_errors` codes are namespaced and resolve to catalog (L1); `examples_ref` resolves to a valid vector file (L1); richer discovery fields validate for L2+; response schemas declare `data` and `_meta` (L2); `_actions[]` rels and two-phase hrefs are valid (L2/L3); idempotency / etag flags consistent (L2); recipe DAG `operation_id` values reference real OpenAPI operations and `body_template` is parseable (L3); vector coverage matches tier minimum (one success vector per op at L1; one failure vector per `possible_errors` entry at L2; one dry-run vector and one two-phase preview+commit pair at L3, when applicable); all cross-refs (discovery → openapi → x-harness → schemas) resolve. Exits non-zero on violations. | `harp-lint` |
 | `harp test --url <base>` | Live conformance. Runs `harp lint` first (static), then dynamic conformance suite (§18) against the deployed service. Replays vectors. Outputs structured `tier_attained` + violations JSON. | `harp-conformance` |
 | `harp migrate --from L1 --to L2` | Diff current state against target tier. Emits patch suggestions. `--apply` writes them; default = dry-run. | `harp-migrate` |
 | `harp docs build` | Render docs site from spec + OpenAPI + recipes + vectors. Astro Starlight template. Service ships docs for free. | `harp-codegen` + Starlight |

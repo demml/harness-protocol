@@ -2,7 +2,7 @@
 id: harp-discovery
 status: draft
 normative: true
-tier: L2
+tier: L1
 version: 0.1
 depends_on: [harp-envelope]
 ---
@@ -66,6 +66,28 @@ trace:
   propagation: w3c_traceparent
 ```
 
+L1 services MUST serve a minimal discovery document containing:
+
+- `harness_version`
+- `service.name`
+- `service.version`
+- `service.stability`
+- `service.max_tier`
+- `links.openapi`
+- `links.errors`
+- `auth.modes`
+- `errors.envelope_schema`
+- `trace.header`
+
+L2+ services MUST add the fields needed for self-navigation and policy decisions:
+
+- `capabilities`
+- `budgets`
+- `links.scopes`
+- `links.audit`
+- `links.examples`
+- `service.effective_tier` when a conformance result is published
+
 `/.well-known/harness/errors`, `/.well-known/harness/scopes`, `/.well-known/harness/recipes`, and `/.well-known/harness/envelope.json` are sub-resources documented in their respective sections:
 
 - Error envelope schema: see [Envelope](./01-envelope.md)
@@ -96,13 +118,13 @@ If absent, agents have no machine-readable signal that a service is pre-producti
 
 Declares the highest HARP tier the service claims to implement.
 
-If absent, agents cannot gate tier-dependent behavior. An agent trying dry-run on a service with no `max_tier` declaration either tries it speculatively (and gets a live mutation if unsupported) or refuses the operation entirely. `max_tier: L2` is the precise signal that dry-run (L3) is unavailable. MUST be present at L2+.
+If absent, agents cannot gate tier-dependent behavior. An agent trying dry-run on a service with no `max_tier` declaration either tries it speculatively (and gets a live mutation if unsupported) or refuses the operation entirely. `max_tier: L2` is the precise signal that dry-run (L3) is unavailable. MUST be present at L1+.
 
 ### `links`
 
 A map of named URLs to service sub-resources.
 
-If absent, agents must hardcode endpoint paths or attempt discovery via OpenAPI path parsing. With `links.openapi`, `links.errors`, `links.scopes`, and `links.audit`, a client can navigate the full service surface from one document. Individual `links` entries SHOULD be present when the corresponding sub-resource exists; they MUST be present when referenced by `capabilities` flags.
+If absent, agents must hardcode endpoint paths or attempt discovery via OpenAPI path parsing. With `links.openapi`, `links.errors`, `links.scopes`, and `links.audit`, a client can navigate the full service surface from one document. `links.openapi` and `links.errors` MUST be present at L1+. Individual richer `links` entries SHOULD be present when the corresponding sub-resource exists; they MUST be present when referenced by `capabilities` flags.
 
 ### `auth.modes`
 
@@ -126,7 +148,7 @@ If absent, a client parsing error codes cannot distinguish service errors from p
 
 A boolean map of optional protocol features the service supports.
 
-If absent, agents must speculatively probe each capability. `capabilities.dry_run: false` is a 1-byte instruction that saves a wasted call, an unexpected mutation, and a debugging session. Each capability flag gates a category of agent behavior. MUST be present at L2+ for the capabilities relevant to the declared tier.
+If absent, agents must speculatively probe each capability. `capabilities.dry_run: false` is a 1-byte instruction that saves a wasted call, an unexpected mutation, and a debugging session. Each capability flag gates a category of agent behavior. MUST be present at L2+ for the capabilities relevant to the declared tier. L1 services MAY omit `capabilities`; clients infer only the L1 baseline.
 
 ### `budgets.default_p99_ms`
 
@@ -154,7 +176,7 @@ If absent, agents that propagate trace context (for `HARP-Causality` audit chain
 
 ## Examples
 
-**Good: minimal discovery doc that correctly declares an L1 service with no optional capabilities.**
+**Good: minimal discovery doc that correctly declares an L1 service.**
 
 ```yaml
 harness_version: "0.1"
@@ -168,23 +190,11 @@ links:
   errors: /.well-known/harness/errors
 auth:
   modes: [bearer_jwt]
-  default_scope: read:public
 errors:
   envelope_schema: /.well-known/harness/envelope.json
   code_prefix: MYSERVICE_
-capabilities:
-  dry_run: false
-  two_phase_commit: false
-  long_running: false
-  idempotency: false
-  optimistic_concurrency: false
-  capability_negotiation: false
-budgets:
-  default_p99_ms: 200
-  rate_limit_per_min: 300
 trace:
   header: x-trace-id
-  propagation: w3c_traceparent
 ```
 
 **Bad: discovery doc that claims L2 but omits `links.audit` and has no `capabilities` block.**
@@ -215,4 +225,4 @@ An agent reading this cannot determine whether idempotency, optimistic concurren
 
 ## Limitations and v0.1 caveats
 
-The discovery doc is not versioned independently — `harness_version` tracks the HARP protocol version, not a document revision. Services that change their capability set between deployments without incrementing `service.version` will serve stale cached discovery docs to clients that respect HTTP caching. v0.1 does not mandate a `Cache-Control` header on the discovery response; implementors SHOULD set `Cache-Control: max-age=300` or shorter. Multi-region services with different capability sets per region (e.g., dry-run in one region, not another) are not addressed in v0.1 — the discovery doc is global.
+The discovery doc is not versioned independently — `harness_version` tracks the HARP protocol version, not a document revision. Services that change their capability set between deployments without incrementing `service.version` will serve stale cached discovery docs to clients that respect HTTP caching. v0.1 does not mandate a `Cache-Control` header on the discovery response; implementors SHOULD set `Cache-Control: max-age=300` or shorter. Multi-region services with different capability sets per region (e.g., dry-run in one region, not another) are not addressed in v0.1 — the discovery doc is global. L1 discovery is intentionally small; agents MUST NOT infer L2 capabilities from absent L2 fields.

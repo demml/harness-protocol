@@ -73,10 +73,11 @@ Each tier compounds on the prior. A service declares its maximum tier in `/.well
 
 | Capability | Letter | Section |
 |---|---|---|
+| Minimal `/.well-known/harness` discovery doc | a | [Discovery](./02-discovery.md) |
 | Error envelope | b | [Envelope](./01-envelope.md) |
 | Failure catalog per endpoint | n | [OpenAPI Extensions](./03-openapi-extensions.md) |
 | Worked examples in schema | o | [OpenAPI Extensions](./03-openapi-extensions.md) |
-| Op semantics tags (`read | write | destructive | idempotent | long_running`) | k | [OpenAPI Extensions](./03-openapi-extensions.md) |
+| Op semantics tags (`read | write | destructive`) | k | [OpenAPI Extensions](./03-openapi-extensions.md) |
 | `trace_id` on every response | s | [Envelope](./01-envelope.md), [Audit](./10-audit.md) |
 | Auth scopes in OpenAPI | h | [Auth Scopes](./11-auth-scopes.md) |
 | Versioning headers | i | [OpenAPI Extensions](./03-openapi-extensions.md) |
@@ -85,7 +86,6 @@ Each tier compounds on the prior. A service declares its maximum tier in `/.well
 
 | Capability | Letter | Section |
 |---|---|---|
-| `/.well-known/harness` discovery doc | a | [Discovery](./02-discovery.md) |
 | Response metadata wrapper `{data, _meta}` | c | [Envelope](./01-envelope.md) |
 | Action affordances `_actions[]` | d | [Envelope](./01-envelope.md) |
 | Idempotency keys | e | [Write Correctness](./05-write-correctness.md) |

@@ -45,7 +45,7 @@ Lives in `harness-protocol/conformance/`. Generic harness in any language; refer
 |---|---|---|
 | Discovery doc shape | L1+ | Validate against `discovery.json` schema |
 | Error envelope on synthetic errors | L1+ | Trigger every `possible_errors` entry per op via vector replay |
-| Success envelope on synthetic happy path | L1+ | Validate `_meta` presence, `trace_id` consistency |
+| Success envelope on synthetic happy path | L2+ | Validate `data`, `_meta` presence, `_meta.trace_id` consistency |
 | Action affordances correctness | L2+ | Follow `_actions[]` rels, verify reachable, verify required preconditions match |
 | Idempotency replay semantics | L2+ | Replay same key + same body, replay + different body |
 | Etag concurrency | L2+ | Stale `If-Match` returns 412 + envelope |
@@ -56,7 +56,7 @@ Lives in `harness-protocol/conformance/`. Generic harness in any language; refer
 | Long-running poll-to-completion | L3 | Submit, poll to terminal, fetch result, cancel |
 | Capability negotiation adaptation | L3 | `compact` strips correctly; `verbose` expands; budget enforces; `HARP-Verbosity-Applied` echoes |
 | Self-test vector roundtrip | L3 | Every vector replayable against the live service |
-| Recipe DAG executability | L3 | Each recipe DAG resolvable via OpenAPI ops; `body_template` interpolation parseable |
+| Recipe DAG executability | L3 | Each recipe DAG `operation_id` resolvable via OpenAPI ops; `body_template` interpolation parseable |
 
 #### 18.3 Output
 

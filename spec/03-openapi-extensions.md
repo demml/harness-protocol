@@ -35,7 +35,7 @@ paths:
     post:
       summary: Register drift profile
       x-harness:
-        semantics: write              # read | write | destructive | idempotent | long_running
+        semantics: write              # read | write | destructive
         stability: stable             # stable | beta | experimental
         idempotent: false             # supports Idempotency-Key header
         requires_etag: false          # writes require If-Match
@@ -70,7 +70,7 @@ Rules:
 
 Declares the operational category of this endpoint.
 
-If absent, agents cannot distinguish safe reads from destructive mutations in the OpenAPI spec alone — they must parse the human `summary` string. `semantics: destructive` is the machine-readable signal that an operation requires additional precautions (two-phase, human confirmation, dry-run preview). The full vocabulary (`read | write | destructive | idempotent | long_running`) is the same used in `_actions[].semantics`, creating a consistent contract between the spec and the runtime response. MUST be set at L1+; no cost beyond authorship.
+If absent, agents cannot distinguish safe reads from destructive mutations in the OpenAPI spec alone — they must parse the human `summary` string. `semantics: destructive` is the machine-readable signal that an operation requires additional precautions (two-phase, human confirmation, dry-run preview). The full vocabulary (`read | write | destructive`) is the same used in `_actions[].semantics`, creating a consistent contract between the spec and the runtime response. Replay behavior and async behavior are modeled separately by `idempotent` and `long_running`; they are not semantic classes. MUST be set at L1+; no cost beyond authorship.
 
 ### `stability`
 

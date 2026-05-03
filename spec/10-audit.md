@@ -109,7 +109,7 @@ If absent, operations performed by different agent implementations are indisting
 
 ### `semantics`
 
-The operation's semantic category (`read | write | destructive | idempotent | long_running`).
+The operation's semantic category (`read | write | destructive`).
 
 If absent, audit queries filtering by operation type (e.g., "show me all destructive operations on this resource") cannot be satisfied without parsing `operation` string patterns. MUST match the `x-harness.semantics` declared for the operation in the OpenAPI spec.
 
