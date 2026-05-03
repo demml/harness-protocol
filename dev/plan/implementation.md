@@ -25,7 +25,7 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 | 3 | Schema authoring | Hand-written JSON Schema 2020-12 in `schemas/`. No derivation from Rust types in v0.1.0 (avoids tight coupling between schema layout and serde structure). Automation deferred to v0.2 |
 | 4 | Reference impl strategy | Spec repo ships `ref-impl/rust-axum` and `ref-impl/python-fastapi` as the canonical conformance targets. They MUST attain tier L3 in CI on every PR |
 | 5 | Skill packaging | Skills live in `~/.claude/skills/harness-*/` as standalone files. They reference canonical material via pinned commit hash in skill frontmatter. First-use fetch from GitHub raw URL with on-disk cache at `~/.claude/skills/harness-*/.cache/` |
-| 6 | Versioning policy | **Protocol semver, MAJOR.MINOR only** (no PATCH on the wire). `harness_version: "1.0"` in discovery doc. Breaking wire-format changes bump MAJOR. New tier additions or new optional fields bump MINOR. Repo crates use full semver independently. v0.1.0 of repo ships protocol version `0.1` (pre-1.0 = unstable; signal in `service.stability` field as `experimental`) |
+| 6 | Versioning policy | **Protocol semver, MAJOR.MINOR only** (no PATCH on the wire). v0.1.0 of repo ships `harness_version: "0.1"` in discovery docs. Breaking wire-format changes bump MAJOR. New tier additions or new optional fields bump MINOR. Repo crates use full semver independently. Pre-1.0 protocol status is signaled in `service.stability` as `experimental`. |
 
 ---
 
@@ -491,7 +491,7 @@ depends_on: []
 ---
 ```
 
-- [ ] **Step 3: Author `spec/02-discovery.md`** from §5 (tier L2, depends_on `[harp-envelope]`).
+- [ ] **Step 3: Author `spec/02-discovery.md`** from §5 (tier L1, depends_on `[harp-envelope]`).
 - [ ] **Step 4: Author `spec/03-openapi-extensions.md`** from §7 (L1, depends_on `[harp-envelope]`).
 - [ ] **Step 5: Author `spec/04-write-safety.md`** from §8 (L3).
 - [ ] **Step 6: Author `spec/05-write-correctness.md`** from §9 (L2).
@@ -575,11 +575,11 @@ git commit -m "feat(spec): vendor markdown spec + index.json regeneration"
 
 - [ ] **Step 2: Author `schemas/envelope-success.json`** matching §6.2. Required: `data` (any), `_meta.schema_ref`, `_meta.tier`, `_meta.service_version`, `_meta.trace_id`, `_meta.occurred_at`. `_actions[]`, `_meta.etag`, `_meta.deprecation`, `_meta.cost` optional.
 
-- [ ] **Step 3: Author `schemas/discovery.json`** matching §5 exactly: top-level `harness_version`, `service`, `links`, `auth`, `errors`, `capabilities`, `budgets`, `trace`.
+- [ ] **Step 3: Author `schemas/discovery.json`** matching §5 exactly: L1 requires `harness_version`, `service`, `links.openapi`, `links.errors`, `auth.modes`, `errors.envelope_schema`, and `trace.header`; L2+ adds `capabilities`, `budgets`, and richer `links`.
 
 - [ ] **Step 4: Author `schemas/openapi-extension.json`** for the `x-harness` block (§7) including `two_phase_token_ttl_seconds`.
 
-- [ ] **Step 5: Author `schemas/recipe.json`** matching §14: `id`, `title`, `description`, `when_to_use`, `inputs[]`, `outputs[]`, `steps[]`, `failure_modes[]`, `examples_ref`, `tier`.
+- [ ] **Step 5: Author `schemas/recipe.json`** matching §14: `id`, `title`, `description`, `when_to_use`, `inputs[]`, `outputs[]`, `steps[].operation_id`, `failure_modes[]`, `examples_ref`, `tier`.
 
 - [ ] **Step 6: Author `schemas/vector.json`** matching §15. Document substitution placeholders (`$TOKEN`, `$UUID`, `$NOW`, `$ETAG_FROM_STEP_<n>`) in schema description fields.
 
@@ -863,6 +863,7 @@ fn flags_op_without_semantics() {
   - `L1.semantics-required` — every op has `x-harness.semantics`
   - `L1.error-code-namespaced` — codes match `^[A-Z][A-Z0-9_]+_[A-Z0-9_]+$`
   - `L1.examples-ref-resolves` — `examples_ref` URL points to a vector file existing on disk
+  - `L1.discovery-doc-shape` — minimal discovery doc validates against `schemas/discovery.json`
   - `L1.trace-id-header-declared` — discovery doc declares `trace.header`
   - `L1.scopes-declared` — every op with mutating semantics has `scopes_required`
   - `L1.versioning-headers-documented` — OpenAPI declares `Deprecation`, `Sunset` as response header refs
@@ -872,7 +873,7 @@ fn flags_op_without_semantics() {
 - [ ] **Step 7: Run tests (pass for each rule).**
 - [ ] **Step 8: Commit.**
 
-**Acceptance:** All six L1 rules fire on crafted negative fixtures and pass on positive fixtures.
+**Acceptance:** All seven L1 rules fire on crafted negative fixtures and pass on positive fixtures.
 
 ---
 
@@ -884,9 +885,9 @@ fn flags_op_without_semantics() {
 - Create: tests + negative fixtures
 
 - [ ] **Step 1-N: TDD per rule (one rule per cycle):**
-  - `L2.discovery-doc-shape` — `harness.yaml` validates against `schemas/discovery.json`
+  - `L2.discovery-rich-fields` — `harness.yaml` includes and validates L2 discovery fields (`capabilities`, `budgets`, and required richer links)
   - `L2.meta-required-on-success` — every 2xx response schema declares `_meta`
-  - `L2.actions-resolve` — `_actions[].rel` references exist as ops in OpenAPI
+  - `L2.actions-resolve` — `_actions[].rel` references exist as ops in OpenAPI; actions with `requires_two_phase: true` include `preview_href` and `commit_href`
   - `L2.idempotency-key-header-documented` — ops with `idempotent: true` declare `Idempotency-Key` parameter
   - `L2.etag-required-on-mutating-reads` — ops returning resources used by `requires_etag: true` writes return `ETag` header
   - `L2.cost-headers-declared` — `HARP-Cost-Units`, `HARP-Actual-Ms` declared as response headers
@@ -908,7 +909,7 @@ fn flags_op_without_semantics() {
   - `L3.dry-run-vector-coverage` — every op with `dry_run: true` has a dry-run vector
   - `L3.two-phase-vector-coverage` — every op with `two_phase: true` has preview + commit vector pair
   - `L3.long-running-jobs-endpoints` — `/jobs/{id}`, `/jobs/{id}/result`, `DELETE /jobs/{id}`, `GET /jobs?...` present
-  - `L3.recipe-dag-references-real-ops` — every recipe step `operation` resolves to real op
+  - `L3.recipe-dag-references-real-ops` — every recipe step `operation_id` resolves to real OpenAPI operation
   - `L3.recipe-template-parseable` — `body_template` parses with `${...}` grammar (only `inputs.X` and `steps.<id>.<captured>` namespaces allowed)
   - `L3.failure-vector-per-error` — every `possible_errors` entry has a failure vector at L2+ (rule registered at L2 but enforced via vector-coverage logic that also runs in L3 context). **Implementer note:** add a doc comment in `rules/l2.rs` explicitly stating this rule's tier assignment is intentional and that the L3-context enforcement is by design — prevents a future contributor from "fixing" the placement.
   - `L3.capability-negotiation-headers-documented` — `HARP-Verbosity`, `HARP-Context-Budget`, etc. declared
@@ -1051,7 +1052,7 @@ pub struct Args {
 - Modify: `crates/harp/Cargo.toml`, `cli/init.rs`, `cli/scaffold.rs`, `actions/init.rs`, `actions/scaffold.rs`
 - Create: tests for both
 
-- [ ] **Step 1: TDD `harp-codegen::init::scaffold_x_harness(openapi) -> ModifiedDoc`** — for each op without `x-harness`, insert a default block with `semantics: read` (safe default), `stability: experimental`, `possible_errors: []` (with TODO comment), `examples_ref: null`. Operations with HTTP method != GET get `semantics: write`. Idempotent flag inferred from method (PUT, DELETE = idempotent).
+- [ ] **Step 1: TDD `harp-codegen::init::scaffold_x_harness(openapi) -> ModifiedDoc`** — for each op without `x-harness`, insert a default block with `semantics: read` (safe default), `stability: experimental`, `possible_errors: []` (with TODO comment), `examples_ref: null`. Operations with HTTP method != GET get `semantics: write`; destructive methods get `semantics: destructive` only when inferred from DELETE or explicitly configured. Idempotent and long-running behavior remain separate flags.
 - [ ] **Step 2: TDD `harp-codegen::scaffold::generate_all(openapi, harness, out_dir)`** — emits `harness.yaml`, `errors.yaml`, `discovery.yaml` skeleton, `vectors/<op_id>.json` skeletons.
 - [ ] **Step 3: Wire to CLI; confirm `harp init --openapi foo.yaml --target-tier L1` writes a modified doc + harness.yaml in-place (`--dry-run` prints diff instead).**
 - [ ] **Step 4: Commit.**
@@ -1118,8 +1119,8 @@ pnpm 9.12.0
   - Asserts response status, header presence, body schema match
   - Returns `VectorResult { vector_id, passed, mismatch: Option<Mismatch> }`
 - [ ] **Step 2: TDD conformance runner per tier — runs lint static prepass + replays all vectors + checks tier-specific dynamic rules:**
-  - L1: error envelope shape, trace_id header presence, examples-as-vectors replay
-  - L2: discovery doc reachable + valid, action affordances reachable, idempotency replay semantics, etag mismatch yields 412, cost headers + body parity
+  - L1: minimal discovery doc reachable + valid, error envelope shape, trace_id header presence, examples-as-vectors replay
+  - L2: rich discovery fields valid, success envelope shape, action affordances reachable, idempotency replay semantics, etag mismatch yields 412, cost headers + body parity
   - L3: dry-run produces no mutation (read-after-write check), two-phase token semantics (expired, reused, replay), long-running poll-to-completion + cancel, capability negotiation adaptation, every recipe DAG resolvable, every vector replayable
 - [ ] **Step 3: `Report` JSON shape matches design doc §18.3 exactly.**
 - [ ] **Step 4: Commit.**

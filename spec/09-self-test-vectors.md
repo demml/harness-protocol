@@ -49,7 +49,7 @@ Where vectors differ from contract tests (e.g., Pact): Pact tests are generated 
       "response": {
         "status": 201,
         "headers": { "ETag": "W/\"v1\"" },
-        "body": { "data": {}, "_meta": {}, "_actions": [] }
+        "body": { "uid": "...", "status": "active" }
       },
       "tier_required": "L1"
     },
@@ -157,10 +157,7 @@ If non-canonical names are used (e.g., `$MY_TOKEN`, `$RANDOM_ID`), conformance r
       "response": {
         "status": 201,
         "headers": { "ETag": "W/\"v1\"", "x-trace-id": "$ANY" },
-        "body": {
-          "data": { "uid": "$ANY", "status": "active" },
-          "_meta": { "tier": "L1", "trace_id": "$ANY" }
-        }
+        "body": { "uid": "$ANY", "status": "active" }
       }
     },
     {

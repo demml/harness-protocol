@@ -51,25 +51,28 @@ recipes:
       - name: cron_job_id
     steps:
       - id: create
-        operation: POST /drift/profiles
+        operation_id: register_drift_profile
         body_template: |
-          { "model_uid": "${inputs.model_uid}", "features": ${inputs.feature_names} }
+          { "model_uid": ${inputs.model_uid}, "features": ${inputs.feature_names} }
         capture: { profile_uid: "$.data.uid" }
       - id: alert
-        operation: POST /alerts/configs
+        operation_id: create_alert_config
         depends_on: [create]
         body_template: |
-          { "profile_uid": "${steps.create.profile_uid}", "channel": "slack" }
+          { "profile_uid": ${steps.create.profile_uid}, "channel": "slack" }
       - id: schedule
-        operation: POST /scheduler/cron
+        operation_id: create_cron_schedule
         depends_on: [create]
         body_template: |
-          { "profile_uid": "${steps.create.profile_uid}", "cron": "0 * * * *" }
+          { "profile_uid": ${steps.create.profile_uid}, "cron": "0 * * * *" }
         capture: { cron_job_id: "$.data.id" }
     failure_modes:
       - step: create
         error: SCOUTER_DUPLICATE_PROFILE
         recovery: "Use existing profile_uid from error._meta.existing_uid; skip to alert step"
+        action: use_existing
+        use_existing_from: "$.error._meta.existing_uid"
+        continue_at: alert
     examples_ref: /openapi/examples/recipes/register_drift_workflow
     tier: L2
 ```
@@ -84,14 +87,18 @@ Notes:
 
 ### Interpolation Grammar
 
-`${...}` interpolation is limited to `${var}` substitution into JSON literals only. No math, no functions. Supported namespaces:
+`${...}` interpolation is limited to JSON-value substitution. No math, no functions. Supported namespaces:
 
 - `inputs.<name>` — values supplied by caller at recipe invocation
 - `steps.<id>.<captured>` — values captured from a prior step via `capture`
 
 Escaping: to emit a literal `${`, use `$${`. No other escaping is defined.
 
-Type coercion: the interpolated value is inserted verbatim into the `body_template` string. Callers are responsible for supplying values of the correct JSON type for the target field.
+Type handling: the interpolated value is serialized as a JSON value after validating recipe inputs against their declared JSON Schema fragments. Strings are quoted by the recipe runner, arrays and objects are inserted as JSON arrays and objects, and numbers/booleans/null keep their JSON type. Recipe authors MUST NOT add extra quotes around placeholders unless they intend the substituted JSON value to become part of a larger string literal.
+
+### Operation Resolution
+
+Recipe steps use `operation_id` as a join key into the service's OpenAPI document. Before executing a recipe, an agent MUST fetch the OpenAPI document from `links.openapi`, build an index from `operationId` to `(method, path template, parameters, requestBody schema, server)`, and resolve each `steps[].operation_id` against that index. If an `operation_id` is missing or duplicated, the recipe is invalid and MUST NOT execute. The route is never inferred from the recipe; it comes from OpenAPI.
 
 ## Per-field rationale
 
@@ -119,11 +126,11 @@ Named values the recipe produces, captured from terminal steps.
 
 If absent, a caller that executes a recipe has no machine-readable signal for what the recipe produced. The caller must parse the last step's response independently. With `outputs`, the executor extracts the named values and returns them in a structured form. MUST include every value a downstream workflow would need from this recipe.
 
-### `steps[].operation`
+### `steps[].operation_id`
 
-The HTTP operation to execute for this step, in `METHOD /path` format.
+The OpenAPI `operationId` to execute for this step.
 
-If absent, the agent cannot execute the step. MUST reference an operation in the service's OpenAPI spec. The `harp lint` tool validates that every `operation` value resolves to a real operation ID.
+If absent, the agent cannot execute the step. MUST reference an `operationId` in the service's OpenAPI spec. The `harp lint` tool validates that every `operation_id` value resolves to exactly one real operation. Recipe steps use `operation_id` rather than `METHOD /path` so path templating, server URL selection, and method lookup remain owned by OpenAPI.
 
 ### `steps[].body_template`
 
@@ -147,7 +154,7 @@ If absent, the executor has no dependency graph — it cannot determine which st
 
 Maps known error codes per step to recovery instructions.
 
-If absent, an agent that hits a known error code (e.g., `SCOUTER_DUPLICATE_PROFILE` on the create step) treats it as an unhandled failure and aborts the recipe. With `failure_modes`, the agent has a machine-readable recovery hint: fetch the existing `profile_uid` from `error._meta.existing_uid` and skip to the next step. SHOULD be exhaustive for errors that have deterministic recovery paths.
+If absent, an agent that hits a known error code (e.g., `SCOUTER_DUPLICATE_PROFILE` on the create step) treats it as an unhandled failure and aborts the recipe. With `failure_modes`, the agent has a recovery hint: fetch the existing `profile_uid` from `error._meta.existing_uid` and skip to the next step. `recovery` is human-readable. Deterministic recoveries SHOULD also provide machine fields: `action`, `use_existing_from`, and `continue_at`. `failure_modes` SHOULD be exhaustive for errors that have deterministic recovery paths.
 
 ### `tier`
 
@@ -172,19 +179,22 @@ If absent, agents cannot determine whether the service's declared `max_tier` is 
     - name: profile_uid
   steps:
     - id: create
-      operation: POST /drift/profiles
+      operation_id: register_drift_profile
       body_template: |
-        { "model_uid": "${inputs.model_uid}", "features": ["${inputs.feature_name}"], "drift_type": "spc" }
+        { "model_uid": ${inputs.model_uid}, "features": [${inputs.feature_name}], "drift_type": "spc" }
       capture: { profile_uid: "$.data.uid" }
     - id: alert
-      operation: POST /alerts/configs
+      operation_id: create_alert_config
       depends_on: [create]
       body_template: |
-        { "profile_uid": "${steps.create.profile_uid}", "channel": "console" }
+        { "profile_uid": ${steps.create.profile_uid}, "channel": "console" }
   failure_modes:
     - step: create
       error: SCOUTER_DUPLICATE_PROFILE
       recovery: "Fetch existing profile from GET /drift/profiles?model_uid=${inputs.model_uid}&drift_type=spc; use returned uid"
+      action: use_existing
+      use_existing_from: "$.error._meta.existing_uid"
+      continue_at: alert
   examples_ref: /openapi/examples/recipes/register_spc_profile
   tier: L1
 ```
@@ -199,7 +209,7 @@ If absent, agents cannot determine whether the service's declared `max_tier` is 
     - name: features
   steps:
     - id: create
-      operation: POST /drift/profiles
+      operation_id: register_drift_profile
       body_template: |
         { "model_uid": "${inputs.model_uid}", "features": ${inputs.features} }
 ```
@@ -211,7 +221,7 @@ An agent using this recipe has no guidance on when to use it vs. another recipe,
 ## Cross-references
 
 - [Discovery](./02-discovery.md) — `links.recipes` points to `/.well-known/harness/recipes`
-- [OpenAPI Extensions](./03-openapi-extensions.md) — `x-harness.related_recipes` links operations to recipes; `harp lint` validates recipe step operations against the OpenAPI spec
+- [OpenAPI Extensions](./03-openapi-extensions.md) — `x-harness.related_recipes` links operations to recipes; `harp lint` validates recipe step `operation_id` values against the OpenAPI spec
 - [Self-Test Vectors](./09-self-test-vectors.md) — `examples_ref` on recipes points to vector documents following the same schema
 - [Conformance](./13-conformance.md) — recipe DAG executability is a mandatory L3 conformance test
 
