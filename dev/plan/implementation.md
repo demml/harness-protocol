@@ -1083,6 +1083,110 @@ pub struct Args {
 
 ---
 
+## Phase C.5 — Early Dogfood
+
+This slice exists so Steven can use HARP locally before the full conformance runner, reference middleware, Python package, and generated docs are done. It is intentionally narrow: one tiny service, one read operation, one local harness path, and two agent adapters that prove Claude Code and Codex can follow the same CLI contract.
+
+### D0.1: Tiny static HARP service
+
+**Goal:** Ship a manually runnable HARP service with no middleware dependency. It proves discovery, OpenAPI resolution, and a read call over real HTTP.
+
+**Files:**
+- Create: `ref-impl/tiny-static/Cargo.toml`, `src/main.rs`
+- Modify: workspace `Cargo.toml` members to include `ref-impl/tiny-static`
+- Create: static OpenAPI/discovery/error payloads inline or under `ref-impl/tiny-static/fixtures/`
+
+- [ ] **Step 1: Build an Axum server named `harp-ref-tiny`** with:
+  - `GET /.well-known/harness`
+  - `GET /.well-known/harness/errors`
+  - `GET /openapi.json`
+  - `GET /entities/{entity_id}`
+- [ ] **Step 2: Hard-code one entity fixture:** entity `a` returns `{"id":"a","name":"Entity A","status":"active"}`.
+- [ ] **Step 3: Use a minimal L1 discovery doc:** `harness_version: "0.1"`, `service.max_tier: "L1"`, `links.openapi`, `links.errors`, `auth.modes: ["none"]`, and `trace.header: "x-trace-id"`.
+- [ ] **Step 4: OpenAPI MUST define `operationId: get_entity`** and `x-harness.semantics: read`.
+- [ ] **Step 5: Add an integration test that starts the server on a random port and verifies discovery, OpenAPI, and `GET /entities/a`.**
+
+**Manual check:**
+
+```bash
+cargo run -p harp-ref-tiny -- --port 8090
+curl http://127.0.0.1:8090/.well-known/harness
+curl http://127.0.0.1:8090/entities/a
+```
+
+**Acceptance:** A developer can run the service locally and inspect the HARP bootstrap documents without any generated middleware.
+
+### D0.2: Minimal read-only `harp harness` path
+
+**Goal:** Make the tiny service consumable through `harp harness` by `operation_id`, with no route guessing.
+
+**Files:**
+- Create: `crates/harp-harness/Cargo.toml`, `src/{lib,registry,discovery,operations,call,error}.rs`
+- Modify: `crates/harp/src/cli/{mod,harness}.rs`, `crates/harp/src/actions/{mod,harness}.rs`
+- Modify: `crates/harp/Cargo.toml` and workspace dependencies to include `harp-harness`
+
+- [ ] **Step 1: Implement project-local registry only:** `.harp/harness.yaml`. User-global registry, auth references, and merge precedence stay in H1.
+- [ ] **Step 2: Implement `harp harness init --scope project`** to create `.harp/harness.yaml` if missing.
+- [ ] **Step 3: Implement `harp harness add <name> <base-url> --no-auth`** by fetching discovery and OpenAPI, validating the minimal L1 fields, and caching operation metadata.
+- [ ] **Step 4: Implement `inspect`, `ops`, and `call` for read operations.**
+- [ ] **Step 5: `call` MUST take `operation_id`, resolve method/path/params from OpenAPI, and refuse missing, duplicate, write, or destructive operations.**
+- [ ] **Step 6: Support `--format json` for all commands in this slice.**
+
+**Manual check:**
+
+```bash
+harp harness init --scope project
+harp harness add tiny http://127.0.0.1:8090 --no-auth
+harp harness inspect tiny --format json
+harp harness ops tiny --format json
+harp harness call tiny get_entity --params '{"entity_id":"a"}' --format json
+```
+
+**Acceptance:** The read call succeeds through HARP metadata only. The caller never provides method or path.
+
+### D0.3: `make dogfood.local` smoke loop
+
+**Goal:** Make the first local product loop one command.
+
+**Files:**
+- Modify: `Makefile`
+- Create: `tests/dogfood/local.sh`
+- Create: `docs/local-dogfooding.md`
+
+- [ ] **Step 1: `tests/dogfood/local.sh`** builds `harp`, starts `harp-ref-tiny` on a free local port, runs the D0.2 command sequence in a temp directory, validates the returned entity JSON, and kills the server on exit.
+- [ ] **Step 2: `make dogfood.local`** runs the script.
+- [ ] **Step 3: Document expected output and failure cases in `docs/local-dogfooding.md`.**
+
+**Acceptance:** `make dogfood.local` passes from a clean clone after D0.1 and D0.2 land.
+
+### D0.4: Claude Code + Codex adapter smoke
+
+**Goal:** Prove two local agents can consume the same service through the same CLI contract.
+
+**Files:**
+- Create: `tools/skills/harness-consumer/SKILL.md`
+- Create: `tools/skills/harness-consumer/references/local-dogfood.md`
+- Modify: `crates/harp/src/cli/{mod,agent}.rs`, `crates/harp/src/actions/{mod,agent}.rs`
+
+- [ ] **Step 1: `harp agent install claude-code --scope project`** writes `.claude/skills/harness-consumer/SKILL.md`.
+- [ ] **Step 2: `harp agent install codex --scope project`** writes `.codex/skills/harness-consumer/SKILL.md`.
+- [ ] **Step 3: The shared skill instructs agents to use `harp harness inspect`, `ops`, and `call`; it MUST tell agents not to use raw HTTP for registered HARP services.**
+- [ ] **Step 4: Add transcript-style smoke docs for both prompts.**
+
+**Manual prompts:**
+
+```text
+Claude, add the local tiny HARP service to my harness and get entity a.
+```
+
+```text
+Codex, use HARP to inspect the local tiny service and call get_entity for entity a.
+```
+
+**Acceptance:** Claude Code and Codex both choose `harp harness` for the local tiny service and return entity `a` without inventing a URL.
+
+---
+
 ### PR 10: `harp-codegen` + `harp init` / `harp scaffold`
 
 **Goal:** Bootstrap an OpenAPI doc with `x-harness` skeletons (`init`); generate ancillary files from existing annotations (`scaffold`).
@@ -1148,31 +1252,31 @@ These addenda make HARP consumable by local agents. They are client-side feature
 
 ### H1: `harp-harness` crate
 
-**Goal:** Provide a local registry and safe execution engine for HARP services.
+**Goal:** Extend the D0.2 read-only harness into a full local registry and safe execution engine for HARP services.
 
 **Files:**
 - Create: `crates/harp-harness/Cargo.toml`, `src/{lib,registry,discovery,operations,call,agent,error}.rs`
 - Modify: workspace dependencies to include `harp-harness`
 - Create: tests + fixtures for registry, discovery, operation indexing, and safe call policy
 
-- [ ] **Step 1: TDD registry loading** — read `~/.harp/harness.yaml` and `.harp/harness.yaml`; project entries override user entries by service name.
+- [ ] **Step 1: TDD registry loading** — keep the D0.2 project-local path and add `~/.harp/harness.yaml`; project entries override user entries by service name.
 - [ ] **Step 2: TDD auth references** — accept `env:NAME`; reject raw-looking bearer tokens, API keys, and inline secret values.
 - [ ] **Step 3: TDD discovery refresh** — fetch `/.well-known/harness`, validate L1 discovery, fetch OpenAPI from `links.openapi`, and persist metadata.
 - [ ] **Step 4: TDD operation index** — build `operationId -> method, path template, parameters, requestBody schema, responses, x-harness`; fail on missing or duplicate `operationId`.
-- [ ] **Step 5: TDD safe call planner** — classify operations as read/write/destructive; surface required auth, body, params, idempotency, ETag, dry-run, and two-phase policy.
-- [ ] **Step 6: TDD call executor** — validate input against OpenAPI, attach HARP headers and auth, execute request, validate HARP response shape, and return structured JSON.
+- [ ] **Step 5: TDD safe call planner** — extend the D0.2 read-only planner to writes and destructive operations; surface required auth, body, params, idempotency, ETag, dry-run, and two-phase policy.
+- [ ] **Step 6: TDD call executor** — extend the D0.2 read-only executor to validate input against OpenAPI, attach HARP headers and auth, execute writes safely, validate HARP response shape, and return structured JSON.
 
 **Acceptance:** A mock HARP service can be added, inspected, planned against, and called by `operation_id` without raw route input from the caller.
 
 ### H2: `harp harness` CLI commands
 
-**Goal:** Expose the harness crate through agent-friendly CLI commands.
+**Goal:** Extend the D0.2 harness CLI into the complete agent-friendly command surface.
 
 **Files:**
 - Modify: `crates/harp/src/cli/{mod,harness}.rs`, `crates/harp/src/actions/{mod,harness}.rs`
 - Modify: `crates/harp/Cargo.toml` to depend on `harp-harness`
 
-- [ ] Implement: `init`, `add`, `refresh`, `list`, `inspect`, `ops`, `recipes`, `plan`, `call`, `recipe run`, `commit`.
+- [ ] Keep the D0.2 commands (`init`, `add`, `inspect`, `ops`, `call`) stable and add: `refresh`, `list`, `recipes`, `plan`, `recipe run`, `commit`.
 - [ ] Default to human-readable output in terminals and support `--format json` for agent adapters.
 - [ ] Return exit code 1 for policy/refusal/validation failures and exit code 2 for internal execution errors.
 
@@ -1180,7 +1284,7 @@ These addenda make HARP consumable by local agents. They are client-side feature
 
 ### H3: `harp agent install claude-code` + `harness-consumer`
 
-**Goal:** Install the first agent adapter while keeping the harness vendor-neutral.
+**Goal:** Extend the D0.4 Claude Code and Codex adapter smoke into the first durable agent adapter package while keeping the harness vendor-neutral.
 
 **Files:**
 - Modify: `crates/harp/src/cli/{mod,agent}.rs`, `crates/harp/src/actions/{mod,agent}.rs`
@@ -1188,6 +1292,7 @@ These addenda make HARP consumable by local agents. They are client-side feature
 - Modify: `tools/skills/install.sh`
 
 - [ ] `harp agent install claude-code --scope user|project` writes the `harness-consumer` skill to the correct Claude Code skill location.
+- [ ] `harp agent install codex --scope user|project` writes the same skill to the correct Codex skill location.
 - [ ] The skill instructs Claude to use `harp harness inspect`, `plan`, `call`, `recipe run`, and `commit`.
 - [ ] The skill explicitly tells Claude not to issue raw HTTP against registered HARP service URLs.
 - [ ] Optional hook template blocks raw `curl`, `wget`, `http`, or scripts against registered base URLs unless invoked through `harp harness`.
@@ -1487,6 +1592,7 @@ canonical_commit: <pinned-hash>
   5. `harp lint --openapi ref-impl/rust-axum/openapi.yaml --tier L3` exit 0
   6. `harp init --openapi tests/fixtures/virgin.yaml --target-tier L1 --dry-run` exit 0
   7. `harp migrate --from L1 --to L2 --openapi tests/fixtures/l1-only.yaml --dry-run` exit 0
+  8. `make dogfood.local` exit 0 to prove the early local loop still works after the full stack lands
 - [ ] **Step 2: CI runs smoke on every PR.**
 - [ ] **Step 3: Commit.**
 
