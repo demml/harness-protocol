@@ -13,7 +13,7 @@ Three compliance tiers:
 
 The finished repo will ship: the spec (markdown + JSON Schema), a Rust CLI tool (`harp`), reference Rust + Python middleware, two reference servers, and reusable Claude skills.
 
-Current tree status: the workspace scaffold, rough-draft markdown spec, and initial agent harness journey docs are present. Most implementation crates, schemas, examples, conformance fixtures, generated docs site, Python package, reference servers, and skills are still planned work.
+Current tree status: the workspace scaffold, rough-draft markdown spec, initial agent harness journey docs, and local dogfooding docs are present. Most implementation crates, schemas, examples, conformance fixtures, generated docs site, Python package, reference servers, and skills are still planned work.
 
 ## Planning Docs
 
@@ -22,7 +22,7 @@ Working docs live in `dev/plan/`:
 | File | Contents |
 |---|---|
 | `dev/plan/protocol-design.md` | Full wire format spec, all decisions |
-| `dev/plan/implementation.md` | 29-PR roadmap with file-level task breakdown |
+| `dev/plan/implementation.md` | 29-PR roadmap, early dogfood slice, and file-level task breakdown |
 
 Read these before making protocol or architecture decisions. They are the source of truth for intent and rationale.
 
@@ -37,6 +37,7 @@ This repository is still pre-implementation.
 - `spec/` contains the rough-draft markdown source of truth: 15 section files plus generated `spec/index.json`.
 - `dev/plan/protocol-design.md` and `dev/plan/implementation.md` are present and should be kept aligned with spec edits.
 - `docs/agent-harness-user-journey.md` documents the draft client-side and agent-side HARP flow.
+- `docs/local-dogfooding.md` documents the planned early CLI, Claude Code, and Codex feedback loop.
 - `schemas/`, `examples/`, `conformance/`, generated Astro docs, `py-harp/`, `ref-impl/`, and `tools/skills/` are planned but not present yet.
 
 ## Current Protocol Decisions
@@ -50,6 +51,7 @@ These decisions are easy to regress. Keep them consistent across `spec/`, `dev/p
 - **Two-phase actions must be explicit.** Destructive `_actions[]` with `requires_two_phase: true` MUST include `preview_href` and `commit_href`; agents follow those hrefs and do not derive phase routes.
 - **Compact responses must be honest.** L3 compact negotiation MAY omit `_actions`, `_meta.cost`, and optional metadata, but omitted fields MUST be listed in `_meta.adaptations.omitted_fields`.
 - **Wire protocol version is `harness_version: "0.1"`.** Use MAJOR.MINOR only; no PATCH in wire payloads.
+- **Local dogfooding lands early.** The first manual feedback loop is a tiny static HARP service plus a read-only `harp harness` path. Do not wait for full conformance or reference middleware before making HARP locally testable.
 - **Agents consume services through `harp harness`.** Agent skills teach Claude Code or other agents what to do, but the local harness CLI owns registry, discovery, OpenAPI operation resolution, auth references, and safety policy.
 - **Do not add MCP/A2A adapters.** HARP's premise is that HTTP/OpenAPI plus HARP metadata is the service contract; `harp harness` is the local client policy layer.
 
@@ -101,9 +103,9 @@ harness-protocol/
 ├── schemas/                ← planned JSON Schema 2020-12 (PR 2)
 ├── examples/               ← planned tested reference fixtures (PR 2)
 ├── conformance/            ← planned tier-graded test vectors (PR 13)
-├── docs/                   ← present draft user docs now; generated Astro site planned in PR 12
+├── docs/                   ← present draft user/dogfood docs now; generated Astro site planned in PR 12
 ├── py-harp/                ← planned Python package (PyO3, PR 19+)
-├── ref-impl/               ← planned Rust + Python reference servers
+├── ref-impl/               ← planned tiny dogfood service plus Rust + Python reference servers
 └── tools/skills/           ← planned Claude skill source (PRs 23–26)
 ```
 

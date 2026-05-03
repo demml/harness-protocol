@@ -1059,6 +1059,21 @@ Shared CLI flags across all subcommands: `--format json|human` (default human), 
 
 Lint engine is the same crate (`harp-lint`) consumed by `harp lint`, `harp test` (static prepass), the planned LSP, and a future GitHub Action binary. Single source of compliance truth.
 
+#### Local dogfood loop
+
+The implementation must expose a manually runnable loop before the full conformance stack lands. The first loop is intentionally small:
+
+```bash
+cargo run -p harp-ref-tiny -- --port 8090
+harp harness init --scope project
+harp harness add tiny http://127.0.0.1:8090 --no-auth
+harp harness call tiny get_entity --params '{"entity_id":"a"}' --format json
+```
+
+`harp-ref-tiny` is a static Axum service under `ref-impl/tiny-static`. It publishes a minimal L1 discovery doc, OpenAPI with `operationId: get_entity`, an error catalog, and one read endpoint. This service is not the canonical reference implementation; it exists so the CLI and agent-consumption path can be tested locally before `harp-axum`, `harp-conformance`, and the full reference servers are complete.
+
+The repo-level smoke target is `make dogfood.local`. It starts the tiny service, adds it to a temporary project harness registry, calls `get_entity`, and fails if the result is not entity `a`.
+
 #### Agent harness CLI
 
 `harp harness` is the client-side runtime for humans and agents consuming HARP services. It is separate from service-side adoption commands like `harp init` and `harp lint`.
@@ -1098,10 +1113,11 @@ Drop-in, framework-native. Goal: 5 lines to bolt L1 onto an existing service; ~2
 
 #### Reference servers
 
+- `ref-impl/tiny-static` — tiny static service for early local dogfooding. One read operation, hard-coded discovery/OpenAPI, no middleware dependency.
 - `ref-impl/rust-axum` — < 500 LOC service using `harp-axum` exercising every L1+L2+L3 feature.
 - `ref-impl/python-fastapi` — < 500 LOC service using `harp.fastapi` exercising the same surface.
 
-Both serve as conformance test targets and copy-paste starting points for adopters.
+The Rust and Python reference servers serve as conformance test targets and copy-paste starting points for adopters. `tiny-static` is only a product feedback loop.
 
 #### Skills (already covered in §17)
 

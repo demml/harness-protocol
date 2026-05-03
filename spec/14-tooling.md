@@ -55,6 +55,19 @@ Shared CLI flags across all subcommands: `--format json|human` (default human), 
 
 Lint engine is the same crate (`harp-lint`) consumed by `harp lint`, `harp test` (static prepass), the planned LSP, and a future GitHub Action binary. Single source of compliance truth.
 
+##### Local Dogfood Loop
+
+The repository SHOULD ship a bare-bones local feedback loop before the full conformance and reference middleware stack is complete:
+
+```bash
+cargo run -p harp-ref-tiny -- --port 8090
+harp harness init --scope project
+harp harness add tiny http://127.0.0.1:8090 --no-auth
+harp harness call tiny get_entity --params '{"entity_id":"a"}' --format json
+```
+
+`ref-impl/tiny-static` is a static Axum service for product feedback, not the canonical reference implementation. It publishes a minimal L1 discovery doc, OpenAPI with `operationId: get_entity`, an error catalog, and one read endpoint. The repo-level `make dogfood.local` target SHOULD start that service, add it to a temporary project harness, call `get_entity`, and fail if the result is not entity `a`.
+
 ##### Agent Harness CLI
 
 `harp harness` is the client-side runtime for humans and agents consuming HARP services. It is intentionally separate from service-side adoption commands like `harp init` and `harp lint`.
@@ -93,10 +106,11 @@ Drop-in, framework-native. Goal: 5 lines to bolt L1 onto an existing service; ~2
 
 ##### Reference Servers
 
+- `ref-impl/tiny-static` — tiny static service for early local dogfooding. One read operation, hard-coded discovery/OpenAPI, no middleware dependency.
 - `ref-impl/rust-axum` — < 500 LOC service using `harp-axum` exercising every L1+L2+L3 feature.
 - `ref-impl/python-fastapi` — < 500 LOC service using `harp.fastapi` exercising the same surface.
 
-Both serve as conformance test targets and copy-paste starting points for adopters.
+The Rust and Python reference servers serve as conformance test targets and copy-paste starting points for adopters. `tiny-static` is only a product feedback loop.
 
 ##### Skills
 

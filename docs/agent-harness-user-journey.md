@@ -23,7 +23,7 @@ There are three layers:
 2. **Local HARP harness** — a CLI-managed registry and execution layer on the user's machine. It owns discovery, OpenAPI indexing, auth references, safety policy, and calls.
 3. **Agent adapter** — a Claude Code skill, Codex skill, or another agent-specific adapter that teaches the agent to use the local harness.
 
-The model should stay vendor-neutral. Claude Code is the first adapter, not the architecture.
+The model should stay vendor-neutral. Claude Code and Codex are the first local adapters, not the architecture.
 
 HARP does not need an MCP or agent-to-agent bridge to make services usable. The service contract is HTTP/OpenAPI plus HARP metadata; the local harness is the client-side policy layer that agents call.
 
@@ -35,9 +35,10 @@ The user installs the HARP CLI, then installs an adapter for their agent:
 
 ```bash
 harp agent install claude-code --scope user
+harp agent install codex --scope user
 ```
 
-This writes a Claude Code skill such as `harness-consumer/SKILL.md`. The skill tells Claude when to use HARP and which `harp harness` commands to run. It does not store secrets.
+This writes an agent skill such as `harness-consumer/SKILL.md` to the tool-specific skill directory. The skill tells the agent when to use HARP and which `harp harness` commands to run. It does not store secrets.
 
 Project-local install is also supported:
 

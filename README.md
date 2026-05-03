@@ -21,9 +21,15 @@ harp harness plan service-a "get entity a" --format json
 harp harness call service-a get_entity --params '{"entity_id":"a"}' --format json
 ```
 
-Claude Code is the first planned adapter. The vendor-neutral piece is `harp harness`: a local registry and execution layer that owns discovery, OpenAPI operation resolution, auth references, safety policy, and HARP response handling.
+Claude Code and Codex are the first planned local adapters. The vendor-neutral piece is `harp harness`: a local registry and execution layer that owns discovery, OpenAPI operation resolution, auth references, safety policy, and HARP response handling.
 
 See [docs/agent-harness-user-journey.md](docs/agent-harness-user-journey.md) for the draft client-side and agent-side user journey.
+
+## Local Dogfooding
+
+The implementation roadmap includes an early local dogfood slice before the full conformance runner and reference middleware are complete. The first loop is a tiny static HARP service plus a read-only `harp harness` path that Claude Code and Codex can both use.
+
+See [docs/local-dogfooding.md](docs/local-dogfooding.md) for the planned local workflow and expected commands.
 
 ## Quickstart
 

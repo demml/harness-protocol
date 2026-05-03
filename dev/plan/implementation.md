@@ -20,10 +20,10 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 
 | # | Question | Resolution |
 |---|---|---|
-| 1 | Decomposition order | Spec markdown + JSON Schemas + `harp-core` first (PRs 0-3), then static analysis (`harp-lint`, PRs 4-7), CLI (PRs 8-12), conformance runner (PRs 13-14), reference middleware (PRs 15-18), Python (PRs 19-22), skills (PRs 23-26), release polish (PRs 27-28) |
+| 1 | Decomposition order | Spec markdown + JSON Schemas + `harp-core` first (PRs 0-3), then static analysis (`harp-lint`, PRs 4-7), CLI (PRs 8-12), early local dogfood after `harp lint` (D0.1-D0.4), conformance runner (PRs 13-14), reference middleware (PRs 15-18), Python (PRs 19-22), skills (PRs 23-26), release polish (PRs 27-28) |
 | 2 | Repo bootstrap content | PR 0 ships `Cargo.toml`, `Makefile`, `README.md`, `CONTRIBUTING.md`, MIT `LICENSE`, `.gitignore`, `.github/workflows/{rust,python,schemas,conformance}.yml`, `rust-toolchain.toml` |
 | 3 | Schema authoring | Hand-written JSON Schema 2020-12 in `schemas/`. No derivation from Rust types in v0.1.0 (avoids tight coupling between schema layout and serde structure). Automation deferred to v0.2 |
-| 4 | Reference impl strategy | Spec repo ships `ref-impl/rust-axum` and `ref-impl/python-fastapi` as the canonical conformance targets. They MUST attain tier L3 in CI on every PR |
+| 4 | Reference impl strategy | Spec repo ships `ref-impl/tiny-static` for early local dogfooding plus `ref-impl/rust-axum` and `ref-impl/python-fastapi` as canonical conformance targets. The canonical Rust/Python reference servers MUST attain tier L3 in CI on every PR |
 | 5 | Skill packaging | Skills live in `~/.claude/skills/harness-*/` as standalone files. They reference canonical material via pinned commit hash in skill frontmatter. First-use fetch from GitHub raw URL with on-disk cache at `~/.claude/skills/harness-*/.cache/` |
 | 6 | Versioning policy | **Protocol semver, MAJOR.MINOR only** (no PATCH on the wire). v0.1.0 of repo ships `harness_version: "0.1"` in discovery docs. Breaking wire-format changes bump MAJOR. New tier additions or new optional fields bump MINOR. Repo crates use full semver independently. Pre-1.0 protocol status is signaled in `service.stability` as `experimental`. |
 
