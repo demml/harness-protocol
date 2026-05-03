@@ -48,10 +48,41 @@ Two-layer architecture: thin clap shell (`crates/harp/src/cli/*`) delegates to p
 | `harp migrate --from L1 --to L2` | Diff current state against target tier. Emits patch suggestions. `--apply` writes them; default = dry-run. | `harp-migrate` |
 | `harp docs build` | Render docs site from spec + OpenAPI + recipes + vectors. Astro Starlight template. Service ships docs for free. | `harp-codegen` + Starlight |
 | `harp serve-refs --lang rust\|python` | Boot a reference server locally for poking and agent demos. | `harp-axum` (Rust) or shells out to `ref-impl/python-fastapi` |
+| `harp harness ...` | Client-side harness registry and safe service execution. Adds HARP services, indexes OpenAPI operations, resolves user intent, and calls services through HARP policy. | `harp-harness` |
+| `harp agent install <adapter>` | Installs agent-specific adapters such as Claude Code skills that teach agents to use `harp harness`. | `harp-codegen` + `harp-harness` |
 
 Shared CLI flags across all subcommands: `--format json|human` (default human), `--config <path>`, `--quiet`, `--verbose`, `-v|-vv`. Exit codes: 0 ok, 1 violation, 2 error.
 
 Lint engine is the same crate (`harp-lint`) consumed by `harp lint`, `harp test` (static prepass), the planned LSP, and a future GitHub Action binary. Single source of compliance truth.
+
+##### Agent Harness CLI
+
+`harp harness` is the client-side runtime for humans and agents consuming HARP services. It is intentionally separate from service-side adoption commands like `harp init` and `harp lint`.
+
+| Subcommand | Purpose |
+|---|---|
+| `harp harness init --scope user\|project` | Create a user-global or project-local harness registry. |
+| `harp harness add <name> <base-url> --auth-env <ENV_VAR>` | Add a HARP service by fetching discovery, fetching OpenAPI, indexing `operationId`, and storing an auth reference. |
+| `harp harness refresh <name>` | Refresh discovery and OpenAPI metadata for a registered service. |
+| `harp harness list` | List registered services and their discovered tiers. |
+| `harp harness inspect <name>` | Show service metadata, capabilities, auth status, and cached operation counts. |
+| `harp harness ops <name>` | List operations, optionally filtered by `read`, `write`, or `destructive`. |
+| `harp harness recipes <name>` | List recipes advertised by the service. |
+| `harp harness plan <name> "<intent>"` | Map user intent to candidate operations or recipes. |
+| `harp harness call <name> <operation_id>` | Execute an operation through HARP policy rather than raw HTTP. |
+| `harp harness recipe run <name> <recipe_id>` | Execute a recipe through the harness. |
+| `harp harness commit <name> <confirmation_token>` | Commit a previously previewed two-phase destructive operation. |
+
+Harness registry locations:
+
+| Location | Scope | Secret policy |
+|---|---|---|
+| `~/.harp/harness.yaml` | User-global | May reference secrets via `auth_ref`, never stores raw secrets |
+| `.harp/harness.yaml` | Project-local | Commit only if it contains no secrets |
+
+Project-local entries override user-global entries with the same service name.
+
+Agents consuming HARP services SHOULD use `harp harness` instead of raw HTTP. The harness owns discovery refresh, OpenAPI operation resolution, auth references, request validation, idempotency keys, ETags, dry-run, two-phase commit, response envelope validation, and HARP error handling.
 
 ##### Reference Middleware Libraries
 
@@ -69,7 +100,7 @@ Both serve as conformance test targets and copy-paste starting points for adopte
 
 ##### Skills
 
-`~/.claude/skills/harness-api-design`, `harness-api-review`, `harness-conformance-test`, `harness-api-migrate`. Each enforces process; canonical content lives in the spec repo.
+`~/.claude/skills/harness-api-design`, `harness-api-review`, `harness-conformance-test`, `harness-api-migrate`, and `harness-consumer`. The first four help service teams adopt HARP. `harness-consumer` helps an agent use registered HARP services through `harp harness`.
 
 | Skill | When invoked | What it does |
 |---|---|---|
@@ -77,6 +108,7 @@ Both serve as conformance test targets and copy-paste starting points for adopte
 | `harness-api-review` | PR review on any API surface | Audits diff against tier requirements. Reports compliance gap with specific MUST/SHOULD violations. |
 | `harness-conformance-test` | Standing up test infra for a HARP-claiming service | Generates conformance test scaffold per declared tier. |
 | `harness-api-migrate` | Existing OpenAPI service wants to adopt HARP | Progressive lift L1 → L2 → L3. Each phase a separate PR. |
+| `harness-consumer` | User wants Claude Code to add or use a HARP service | Routes service add/inspect/call/recipe requests through `harp harness`; instructs the agent not to use raw HTTP for registered services. |
 
 #### 21.2 Tier 2 (post-v1.0 roadmap)
 
