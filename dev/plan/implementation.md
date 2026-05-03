@@ -35,7 +35,7 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 ~/Documents/GitHub/harness-protocol/
 ├── Cargo.toml                      ← workspace root [PR 0]
 ├── Cargo.lock                      ← committed [PR 0]
-├── Makefile                        ← lints/test/format targets [PR 0]
+├── Makefile                        ← lints/test/format targets [PR 0]; dogfood.local [D0.3]
 ├── README.md                       ← project overview [PR 0]
 ├── CONTRIBUTING.md                 ← contributor guide [PR 0]
 ├── LICENSE                         ← MIT [PR 0]
@@ -62,8 +62,8 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │       │   ├── test.rs         [PR 14]
 │   │       │   ├── migrate.rs      [PR 11]
 │   │       │   ├── docs.rs         [PR 12]
-│   │       │   ├── harness.rs      [client harness addendum]
-│   │       │   ├── agent.rs        [client harness addendum]
+│   │       │   ├── harness.rs      [D0.2 + client harness addendum]
+│   │       │   ├── agent.rs        [D0.4 + client harness addendum]
 │   │       │   └── serve_refs.rs   [PR 18]
 │   │       └── actions/
 │   │           ├── mod.rs          [PR 8]
@@ -73,8 +73,8 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │           ├── conformance.rs  [PR 14]
 │   │           ├── migrate.rs      [PR 11]
 │   │           ├── docs.rs         [PR 12]
-│   │           ├── harness.rs      [client harness addendum]
-│   │           └── agent.rs        [client harness addendum]
+│   │           ├── harness.rs      [D0.2 + client harness addendum]
+│   │           └── agent.rs        [D0.4 + client harness addendum]
 │   │
 │   ├── harp-core/                  ← protocol types
 │   │   ├── Cargo.toml              [PR 3]
@@ -137,14 +137,14 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   │       └── error.rs            [PR 10]
 │   │
 │   ├── harp-harness/               ← client-side HARP service registry + safe execution
-│   │   ├── Cargo.toml              [client harness addendum]
+│   │   ├── Cargo.toml              [D0.2 + client harness addendum]
 │   │   └── src/
 │   │       ├── lib.rs
-│   │       ├── registry.rs         ← ~/.harp and .harp registry load/merge
-│   │       ├── discovery.rs        ← fetch /.well-known/harness + OpenAPI
-│   │       ├── operations.rs       ← operationId index and intent planning
-│   │       ├── call.rs             ← safe HARP calls
-│   │       ├── agent.rs            ← adapter installation helpers
+│   │       ├── registry.rs         ← ~/.harp and .harp registry load/merge [D0.2]
+│   │       ├── discovery.rs        ← fetch /.well-known/harness + OpenAPI [D0.2]
+│   │       ├── operations.rs       ← operationId index and intent planning [D0.2]
+│   │       ├── call.rs             ← safe HARP calls [D0.2]
+│   │       ├── agent.rs            ← adapter installation helpers [D0.4]
 │   │       └── error.rs
 │   │
 │   ├── harp-axum/                  ← reference Rust middleware
@@ -187,6 +187,9 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │   └── tests/                      [PR 19+]
 │
 ├── ref-impl/
+│   ├── tiny-static/                ← bare-bones manually runnable HARP service
+│   │   ├── Cargo.toml              [D0.1]
+│   │   └── src/main.rs             [D0.1]
 │   ├── rust-axum/                  ← Rust reference server
 │   │   ├── Cargo.toml              [PR 17]
 │   │   └── src/main.rs             [PR 17]
@@ -231,6 +234,7 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 │
 ├── docs/
 │   ├── agent-harness-user-journey.md ← draft client-side + agent-side user journey
+│   ├── local-dogfooding.md         ← local CLI + Claude/Codex dogfood loop [D0.3, D0.4]
 │   └── (Astro Starlight site generated later) [PR 12]
 │
 └── tools/skills/                   ← skill source-of-truth, versioned in repo
@@ -248,8 +252,8 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
     │   ├── SKILL.md                [PR 26]
     │   └── references/             [PR 26]
     └── harness-consumer/
-        ├── SKILL.md                [client harness addendum]
-        └── references/             [client harness addendum]
+        ├── SKILL.md                [D0.4 + client harness addendum]
+        └── references/             [D0.4 + client harness addendum]
 ```
 
 ---
@@ -268,6 +272,10 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 | | 7 | `harp-lint` L3 rules | 6 |
 | **C — CLI** | 8 | `harp` binary skeleton + clap | 3 |
 | | 9 | `harp lint` subcommand | 5, 8 |
+| **C.5 — Early dogfood** | D0.1 | Tiny static HARP service | 3, 4, 8, 9 |
+| | D0.2 | Minimal read-only `harp harness` path | D0.1 |
+| | D0.3 | `make dogfood.local` smoke loop | D0.2 |
+| | D0.4 | Claude Code + Codex adapter smoke | D0.2, D0.3 |
 | | 10 | `harp-codegen` + `harp init`/`scaffold` | 8 |
 | | 11 | `harp-migrate` + `harp migrate` | 8 |
 | | 12 | `harp docs build` (Astro Starlight) | 10 |
@@ -288,11 +296,11 @@ The spec's §20 Open Questions are resolved as follows. These decisions are inpu
 | **H — Polish** | 27 | End-to-end smoke + ref-impl conformance CI | 17, 22 |
 | | 28 | v0.1.0 release prep | all |
 
-29 PRs plus a client/agent harness addendum. Critical path: 0 → 1, 2, 3 → 4, 5, 8 → 6 → 7 → 9 → 14, 17. Everything else parallelizes after PR 3.
+29 PRs plus an early dogfood slice and a client/agent harness addendum. First local feedback loop: 0 → 1, 2, 3 → 4, 5, 8 → 9 → D0.1 → D0.2 → D0.3 → D0.4. Full conformance critical path remains 0 → 1, 2, 3 → 4, 5, 8 → 6 → 7 → 9 → 14, 17. Everything else parallelizes after PR 3.
 
 ### Client/Agent Harness Addendum
 
-This addendum should be slotted after PR 12 and before release polish. It adds the local client-side harness needed for actual agent consumption.
+This addendum builds on the early dogfood slice. D0.2 ships the smallest read-only harness path; H1/H2 finish the client-side harness for writes, destructive operations, recipes, and full policy enforcement. H3/H4 harden the adapter and docs story after the CLI path is real.
 
 | Addendum | Title | Depends on |
 |---|---|---|
